@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (keep tracked via .gitignore exceptions if needed)
+data/reddit_threads.jsonl
+data/reddit_threads_normalized.jsonl
+data/seen_post_ids.txt

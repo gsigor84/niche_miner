@@ -1,0 +1,88 @@
+{
+  "ecommerce": {
+    "name": "E-commerce & Physical Products",
+    "templates": [
+      "best {kw}",
+      "{kw} review",
+      "{kw} quality",
+      "{kw} vs",
+      "recommended {kw}",
+      "{kw} shipping time",
+      "{kw} returns",
+      "{kw} sizing",
+      "{kw} supplier"
+    ],
+    "labels": [
+      "Quality Issue",
+      "Shipping Delay",
+      "Return Policy Query",
+      "Sizing Problem",
+      "Price Comparison",
+      "Supplier Review",
+      "Noise"
+    ]
+  },
+  "saas": {
+    "name": "Software as a Service (SaaS)",
+    "templates": [
+      "best {kw} software",
+      "{kw} alternatives",
+      "{kw} pricing",
+      "{kw} review",
+      "{kw} api integration",
+      "{kw} vs",
+      "{kw} documentation",
+      "how to use {kw}",
+      "open source {kw}"
+    ],
+    "labels": [
+      "Bug Report",
+      "Feature Request",
+      "Documentation Gap",
+      "API/Integration Issue",
+      "Pricing Query",
+      "Setup Help",
+      "Noise"
+    ]
+  },
+  "services": {
+    "name": "Local & Professional Services",
+    "templates": [
+      "best {kw} near me",
+      "{kw} cost",
+      "{kw} reviews",
+      "{kw} reliability",
+      "recommended {kw}",
+      "{kw} availability",
+      "professional {kw}"
+    ],
+    "labels": [
+      "Service Complaint",
+      "Reliability Query",
+      "Price Inquiry",
+      "Availability/Booking",
+      "Professional Referral",
+      "Noise"
+    ]
+  },
+  "learning": {
+    "name": "Content & Learning Labs",
+    "templates": [
+      "best {kw} course",
+      "how to learn {kw}",
+      "{kw} for beginners",
+      "{kw} tutorial",
+      "{kw} certification",
+      "{kw} roadmap",
+      "is {kw} worth it"
+    ],
+    "labels": [
+      "Tutorial Request",
+      "Curriculum/Roadmap Query",
+      "Difficulty/Prerequisite",
+      "Certification Value",
+      "Free Resource Search",
+      "Noise"
+    ]
+  }
+}

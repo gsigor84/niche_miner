@@ -1,6 +1,18 @@
-# Trash Miner
+# Trash Miner — Universal Niche Engine
 
-**Print-on-Demand niche research toolkit.** Discovers product niches, mines Reddit for pain points, and normalizes data for AI/LLM analysis — all without API keys.
+**Automated market intelligence and pain-point discovery.** A powerhouse toolkit for researching **any** niche (SaaS, E-commerce, Services) by mining Reddit and Google insights — all without API keys.
+
+## 🔄 Visual Pipeline Flow
+
+```mermaid
+graph LR
+    A[seed_topics.txt] -->|keywords| B[trash_miner.py]
+    B -->|trash candidates| C[suggested_trash_candidates.txt]
+    D[seed_topics.txt] -->|keywords| E[scout_subreddits.py]
+    E -->|subreddits| F[rss_miner.py]
+    F -->|raw threads| G[normalize_reddit_jsonl.py]
+    G -->|clean data| H[AI Analysis]
+```
 
 ---
 
@@ -8,15 +20,18 @@
 
 ```
 trash_miner/
-├── seed_topics.txt                  # Product topics (one per line)
-├── seed_harvester.py                # Generates seed_topics.txt from Google taxonomy
+├── config/
+│   └── query_packs.json             # Niche-specific search & NLP templates
+├── seed_topics.txt                  # Target keywords (one per line)
+├── seed_factory.py                  # Generates seeds via Google or LLM Brainstorming
+├── scout_subreddits.py              # Dynamically finds relevant subreddits
 ├── trash_miner.py                   # Mines Google autocomplete for negative keywords
-├── rss_miner.py                     # Scrapes Reddit RSS for pain-point threads
-├── normalize_reddit_jsonl.py        # Normalizes mixed-schema JSONL output
+├── rss_miner.py                     # Universal Reddit RSS miner (niche-agnostic)
+├── normalize_reddit_jsonl.py        # Normalizers mixed-schema JSONL output
 ├── data/
 │   ├── reddit_threads.jsonl         # Raw mined Reddit threads
 │   ├── reddit_threads_normalized.jsonl  # Cleaned output
-│   └── seen_post_ids.txt            # Dedup tracker for rss_miner
+│   └── seen_post_ids.txt            # Dedup tracker
 └── suggested_trash_candidates.txt   # Output from trash_miner
 ```
 
@@ -30,7 +45,7 @@ trash_miner/
 - Install dependencies:
 
 ```bash
-pip install requests feedparser beautifulsoup4
+pip install requests feedparser beautifulsoup4 httpx
 ```
 
 > `normalize_reddit_jsonl.py` and `trash_miner.py` use only the standard library — no extra deps needed for those.
@@ -41,15 +56,19 @@ pip install requests feedparser beautifulsoup4
 
 The scripts run in order. Each step feeds the next.
 
-### Step 1 — Seed Topics
+### Step 1 — Seed Topics (LLM/Google)
 
-Edit `seed_topics.txt` directly (one product topic per line), or auto-generate it from Google's product taxonomy:
+Edit `seed_topics.txt` directly, or use the **Seed Factory** to generate topics from Google's taxonomy or use **LLM Brainstorming** (requires local Ollama):
 
 ```bash
-python3 seed_harvester.py
+# Option A: Google Shopping Taxonomy (Products)
+python3 seed_factory.py --source google
+
+# Option B: LLM Brainstorming (Any niche, e.g. SaaS)
+python3 seed_factory.py --source llm --topic "CRM software" --count 10
 ```
 
-**Output:** `seed_topics.txt` — clean list of product categories.
+**Output:** `seed_topics.txt` — clean list of niche categories.
 
 **Format:**
 ```
@@ -62,7 +81,19 @@ yoga pilates mats
 
 ---
 
-### Step 2 — Trash Mining (Negative Keywords)
+### Step 2 — Scout Subreddits (Discovery)
+
+Automatically find where people are talking about your keywords. This discovers the best targets for the miner:
+
+```bash
+python3 scout_subreddits.py "crm software, sales automation" --limit 5
+```
+
+**Output:** Recommends the `--subs` list for the next step.
+
+---
+
+### Step 3 — Trash Mining (Search Intel)
 
 Discovers irrelevant/negative search terms across your product topics using Google Autocomplete:
 
@@ -74,9 +105,17 @@ python3 trash_miner.py
 
 ---
 
-### Step 3 — Reddit RSS Mining
+### Step 4 — Universal Reddit Mining
 
-Scrapes Reddit subreddits for pain-point threads using RSS (no API key needed). Reads keywords from `seed_topics.txt` automatically.
+Scrapes Reddit for pain-point threads using RSS. Uses **Query Packs** (SaaS, E-commerce, Services) to tailor the search.
+
+```bash
+# Mine a SaaS niche
+python3 rss_miner.py --mode fetch --niche_type saas --subs CRMSoftware,CRM
+
+# Mine an E-commerce niche with a prefix
+python3 rss_miner.py --mode fetch --niche_type ecommerce --prefix "best" --subs printondemand
+```
 
 ```bash
 # Dry run — preview all URLs without fetching
@@ -100,25 +139,20 @@ python3 rss_miner.py --mode fetch \
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--mode` | *required* | `urls` (dry run) or `fetch` (scrape) |
+| `--mode` | *required* | `urls` or `fetch` |
+| `--niche_type` | `ecommerce` | `saas`, `ecommerce`, `services`, `learning` |
+| `--subs` | *required* | Comma-separated target subreddits |
+| `--prefix` | `None` | Optional keyword prefix (e.g. "best") |
 | `--t` | `month` | Time window: `day`, `week`, `month`, `year`, `all` |
-| `--sort` | `top` | Search sort: `top`, `new`, `relevance`, `comments` |
-| `--max_posts` | `20` | Max posts per feed |
-| `--include_comments` | off | Also fetch comment RSS per post |
-| `--max_comments` | `10` | Max comments per post |
-| `--only_pain_points` | off | Filter to pain-point threads only |
-| `--sleep` | `0.9` | Delay between requests (be polite) |
-| `--include_top` | off | Include subreddit `/top.rss` feeds |
-| `--include_new` | off | Include subreddit `/new/.rss` feeds |
-| `--include_search` | off* | Include search RSS queries (*default if none selected) |
+| `--include_comments` | off | Fetch first 10 comments per post |
+| `--only_pain_points` | off | Filter to pain-point patterns only |
 | `--out` | `data/reddit_threads.jsonl` | Output file |
-| `--seen` | `data/seen_post_ids.txt` | Dedup tracker |
 
 **Output:** `data/reddit_threads.jsonl` — one JSON object per line.
 
 ---
 
-### Step 4 — Normalize JSONL
+### Step 5 — Normalize JSONL
 
 Fixes inconsistent schemas from different miner versions (e.g., `feed` vs `feed_type`, `subreddit` vs `subreddit_feed`) into a single clean schema.
 
@@ -162,18 +196,86 @@ python3 normalize_reddit_jsonl.py --strict
 
 ---
 
+## 📦 Query Packs & Dynamic NLP
+
+The engine uses `config/query_packs.json` to customize both the search strategy and the classification labels for your specific industry. 
+
+### What's inside a Query Pack?
+- **Templates**: Search variants to find high-intent conversations (e.g., `{kw} alternatives`, `{kw} vs`).
+- **Labels**: Specialized classification buckets for the NLP engine (e.g., `Bug Report`, `Price Comparison`).
+
+**Example: `saas` pack**
+```json
+"saas": {
+  "name": "Software as a Service (SaaS)",
+  "templates": ["{kw} alternatives", "{kw} pricing", "{kw} api integration"],
+  "labels": ["Bug Report", "Feature Request", "Documentation Gap", "API Issue"]
+}
+```
+
+---
+
+## 📊 Output Examples (SaaS)
+
+### 1. `suggested_trash_candidates.txt`
+Identifies "noise" keywords that you might want to exclude from Google Ads or SEO campaigns.
+```text
+login (124)    <-- High frequency, likely support noise
+password (98)  <-- Customer support intent
+forgot (85)    <-- Account issues
+free (65)      <-- Low intent searchers
+...
+```
+
+### 2. `reddit_threads_normalized.jsonl`
+Cleaned, enriched data ready for AI analysis or your next spreadsheet.
+```json
+{
+  "fetched_at": "2026-02-18T21:30:38Z",
+  "title": "Is there a good CRM that works well with Squarespace?",
+  "summary": "I'm looking for a tool that handles leads from Squarespace forms...",
+  "subreddit": "CRMSoftware",
+  "is_pain_point": true,
+  "labels": ["API/Integration Issue", "Pricing Query"]
+}
+```
+
+---
+
 ## Quick Start (Full Pipeline)
 
 ```bash
 # 1. Install deps
-pip install requests feedparser beautifulsoup4
+pip install requests feedparser beautifulsoup4 httpx
 
-# 2. Mine Reddit (uses seed_topics.txt)
-python3 rss_miner.py --mode fetch --include_search --include_top --t month
+# 2. Brainstorm seeds (e.g. for SaaS)
+python3 seed_factory.py --source llm --topic "CRM tools" --count 5
 
-# 3. Normalize the output
+# 3. Scout subreddits
+python3 scout_subreddits.py "crm tools" --limit 3
+
+# 4. Mine Reddit
+python3 rss_miner.py --mode fetch --niche_type saas --subs CRMSoftware,CRM
+
+# 5. Normalize & Enjoy
 python3 normalize_reddit_jsonl.py --dedupe --add_derived_fields
-
-# 4. Your clean data is ready at:
-#    data/reddit_threads_normalized.jsonl
 ```
+
+# 💡 Pro-Tips & Troubleshooting
+
+### 1. Handling shell errors (Zsh/Bash)
+If you see `zsh: no matches found: [SUBREDDITS]`, it means you left the square brackets in the command. 
+- **Incorrect:** `--subs [asana,jira]`
+- **Correct:** `--subs asana,jira` (No brackets, no spaces)
+
+### 2. The "Yoga" Problem (Ambiguous Keywords)
+Some keywords have multiple meanings. For example, scouting for **"Asana"** will return `r/yoga` as well as `r/asana`. 
+- **Tip:** When the `scout_subreddits.py` tool gives you a list, always do a quick "sanity check" and remove irrelevant subreddits before running the `rss_miner`.
+
+### 3. LLM JSON Wrapping
+If you use a small local model (like `llama3.2:3b`) with `seed_factory.py`, it may sometimes wrap the list in a key like `{"seeds": [...]}` instead of a plain list. 
+- **Fix:** The script has been updated to handle this automatically by searching for any lists inside the returned JSON object.
+
+### 4. Rate Limiting (The "429" Error)
+Since this tool uses RSS feeds and doesn't require API keys, it is subject to Reddit's standard rate limits. 
+- **Fix:** If you see "Too Many Requests", wait 60 seconds or reduce your `--max_posts` and `--subs` count in a single run.

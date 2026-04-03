@@ -1,205 +1,49 @@
 # SUGGESTED TRASH INTENT CANDIDATES
-# Based on analysis of 5588 seed topics.
+# Based on analysis of 3 topics.
 # Format: Word (Frequency)
 # Copy the ones you want to ban into 'trash_intent.txt'
 
-and
-for
-accessories
-car
-near
-bike
-water
-baby
-amazon
-bicycle
-parts
-food
-best
-how
-pet
-sale
-air
-hair
-with
-are
-what
-dog
-equipment
-cover
-vehicle
-outdoor
-set
-table
-ebay
-pool
-home
-australia
-machine
-drawing
-black
-box
-kit
-bunnings
-design
-fishing
-ball
-canada
-cleaner
-paper
-storage
-the
-game
-battery
-nail
-diy
-bath
-bag
-argos
-gun
-paint
-walmart
-video
-electric
-supplies
-covers
-audio
-cleaning
-art
-big
-bed
-filter
-can
-play
-office
-basketball
-easy
-garden
-dispenser
-tire
-buy
-brush
-golf
-seat
-diagram
-costco
-asda
-music
-boat
-stand
-heater
-crossword
-dollar
-use
-belt
-cable
-brands
-wheel
-football
-definition
-price
-american
-dryer
-depot
-pipe
-cheap
-furniture
-grill
-maker
-work
-mat
-cost
-bottle
-kids
-fabric
-hockey
-floor
-holder
-aquarium
-guitar
-christmas
-toys
-clue
-brake
-tools
-bar
-tool
-ideas
-chair
-system
-door
-you
-code
-board
-gas
-software
-canadian
-replacement
-plumbing
-case
-benefits
-toddler
-meaning
-nearby
-bags
-frozen
-blue
-paintball
-examples
-recipe
-window
-camera
-edmonton
-pencil
-steering
-extension
-wine
-remover
-pillow
-card
-hose
-direct
-pump
-does
-light
-wood
-free
-gift
-plate
-bulk
-boots
-bird
-repair
-training
-shop
-dimensions
-polish
-fish
-explained
-tree
-app
-wall
-attachment
-steamer
-musical
-types
-baking
-bathroom
-reviews
-portable
-drill
-oil
-difference
-book
-dogs
-fruit
-glass
-file
-rack
-size
-cutter
-calculator
-craft
-pole
-kits
-safety
+examples	(3)
+integration	(3)
+teams	(3)
+smart	(2)
+best	(2)
+devops	(2)
+api	(2)
+automated	(1)
+approval	(1)
+advanced	(1)
+work	(1)
+not	(1)
+working	(1)
+functions	(1)
+rules	(1)
+values	(1)
+else	(1)
+limits	(1)
+variables	(1)
+lookup	(1)
+table	(1)
+description	(1)
+formatting	(1)
+lookupissues	(1)
+tag	(1)
+user	(1)
+comment	(1)
+import	(1)
+rule	(1)
+multiple	(1)
+triggers	(1)
+custom	(1)
+fields	(1)
+initiator	(1)
+outlook	(1)
+app	(1)
+have	(1)
+cest	(1)
+quoi	(1)
+payment	(1)
+methods	(1)
+integrações	(1)
+microsoft	(1)
+plugin	(1)

@@ -36,69 +36,55 @@ import requests
 from bs4 import BeautifulSoup
 
 # -----------------------------
-# CONFIG (edit if you want)
+# CONFIG
 # -----------------------------
 
 SEED_TOPICS_FILE = "seed_topics.txt"
-KEYWORD_PREFIX = "print on demand"
+QUERY_PACKS_FILE = "config/query_packs.json"
 
 
-def load_keywords(path: str = SEED_TOPICS_FILE) -> List[str]:
-    """Read seed_topics.txt and build keyword list with 'print on demand' prefix."""
+def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) -> List[str]:
+    """Read seed topics and optionally add a prefix."""
     filepath = Path(path)
     if not filepath.exists():
         print(f"[ERROR] Seed file not found: {filepath}")
-        print("Create seed_topics.txt or run seed_harvester.py first.")
-        import sys; sys.exit(1)
+        return []
+    
     keywords = []
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
             topic = line.strip()
             if not topic or topic.startswith("#"):
                 continue
-            keywords.append(f"{KEYWORD_PREFIX} {topic}")
+            if prefix:
+                keywords.append(f"{prefix} {topic}")
+            else:
+                keywords.append(topic)
     return keywords
 
-SUBREDDITS = [
-    "printondemand",
-    "printondemandhelp",
-    "printful",
-    "Printify",
-    "shopify",
-    "streetwearstartup",
-]
 
-# These query packs are designed to surface buyer-intent threads:
-# comparisons, quality issues, margins, suppliers, returns, etc.
-QUERY_TEMPLATES = [
-    # comparisons / alternatives
-    "best {kw}",
-    "{kw} review",
-    "{kw} vs",
-    "{kw} alternatives",
-    "recommended {kw}",
+def load_query_templates(niche_type: str) -> List[str]:
+    """Load query templates for the specified niche type from JSON config."""
+    path = Path(QUERY_PACKS_FILE)
+    if not path.exists():
+        print(f"[WARNING] Query packs file not found: {path}. Using default templates.")
+        return ["{kw} best", "{kw} review"]
+    
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get(niche_type, {}).get("templates", ["{kw} best", "{kw} review"])
+    except Exception as e:
+        print(f"[ERROR] Failed to load query packs: {e}")
+        return ["{kw} best", "{kw} review"]
 
-    # quality / defects / ops
-    "{kw} quality",
-    "{kw} blank quality",
-    "{kw} fading",
-    "{kw} shrink",
-    "{kw} sizing",
-    "{kw} misprint",
 
-    # money: margins, shipping, returns
-    "{kw} profit",
-    "{kw} margins",
-    "{kw} pricing",
-    "{kw} shipping time",
-    "{kw} returns",
-
-    # supplier/provider trust
-    "{kw} supplier",
-    "{kw} fulfillment",
-    "Printful {kw_short} review",
-    "Printify {kw_short} review",
-    "Yoycol {kw_short} review",
+# Default subreddits if none provided
+DEFAULT_SUBREDDITS = [
+    "entrepreneur",
+    "startup",
+    "business",
+    "sideproject",
 ]
 
 # kw_short is auto-derived from the keyword by stripping the prefix.
@@ -205,19 +191,25 @@ def comments_feed(sub: str, post_id: str) -> str:
 # Query Generation
 # -----------------------------
 
-def derive_kw_short(kw: str) -> str:
-    """Auto-derive short product name by stripping 'print on demand' prefix."""
-    base = kw.lower().replace("print on demand", "").strip()
-    return base if base else kw
+def derive_kw_short(kw: str, prefix: Optional[str] = None) -> str:
+    """Auto-derive short product name by stripping the prefix."""
+    if prefix:
+        base = kw.lower().replace(prefix.lower(), "").strip()
+        return base if base else kw
+    return kw
 
-def build_queries_for_keyword(kw: str) -> List[str]:
-    kw_short = derive_kw_short(kw)
+def build_queries_for_keyword(kw: str, templates: List[str], prefix: Optional[str] = None) -> List[str]:
+    kw_short = derive_kw_short(kw, prefix)
     queries = []
-    for tmpl in QUERY_TEMPLATES:
-        q = tmpl.format(kw=kw, kw_short=kw_short)
-        # Keep queries compact; Reddit search sometimes hates punctuation-heavy queries
-        q = q.replace("  ", " ").strip()
-        queries.append(q)
+    for tmpl in templates:
+        try:
+            q = tmpl.format(kw=kw, kw_short=kw_short)
+            # Keep queries compact; Reddit search sometimes hates punctuation-heavy queries
+            q = q.replace("  ", " ").strip()
+            queries.append(q)
+        except Exception:
+            # If template has unknown keys, just use basic format
+            queries.append(f"{kw} best")
     # remove duplicates, preserve order
     seen = set()
     out = []
@@ -274,11 +266,13 @@ def collect_comments(sub: str, post_id: str, max_comments: int, sleep_s: float) 
 def generate_all_feed_urls(
     subs: List[str],
     keywords: List[str],
+    templates: List[str],
     t: str,
     sort: str,
     include_top: bool,
     include_new: bool,
     include_search: bool,
+    prefix: Optional[str] = None
 ) -> List[Tuple[str, str, str]]:
     """
     Returns list of (subreddit, feed_type, url).
@@ -294,7 +288,7 @@ def generate_all_feed_urls(
 
         if include_search:
             for kw in keywords:
-                for q in build_queries_for_keyword(kw):
+                for q in build_queries_for_keyword(kw, templates, prefix):
                     urls.append((sub, "search", subreddit_search_feed(sub, q, sort=sort, t=t)))
 
     return urls
@@ -308,11 +302,13 @@ def run_fetch(args):
     feeds = generate_all_feed_urls(
         subs=args.subs,
         keywords=args.keywords,
+        templates=args.templates,
         t=args.t,
         sort=args.sort,
         include_top=args.include_top,
         include_new=args.include_new,
         include_search=args.include_search,
+        prefix=args.prefix
     )
 
     print(f"Feeds to fetch: {len(feeds)}")
@@ -382,9 +378,13 @@ def run_fetch(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Mine Print-on-Demand Reddit via RSS (no API key).")
+    ap = argparse.ArgumentParser(description="Universal Niche RSS Miner (No API Key).")
 
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
+    ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
+    ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
+    
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
     ap.add_argument("--sort", default="top", choices=["top", "new", "relevance", "comments"], help="Search sort mode")
 
@@ -404,10 +404,21 @@ def main():
 
     args = ap.parse_args()
 
-    # Load keywords from seed_topics.txt instead of hardcoded list
-    args.keywords = load_keywords()
-    args.subs = SUBREDDITS
-    print(f"[INFO] Loaded {len(args.keywords)} keywords from {SEED_TOPICS_FILE}")
+    # Load templates from config
+    args.templates = load_query_templates(args.niche_type)
+    
+    # Load keywords from seed_topics.txt
+    args.keywords = load_keywords(prefix=args.prefix)
+    
+    # Determine subreddits
+    if args.subs:
+        args.subs = [s.strip() for s in args.subs.split(",") if s.strip()]
+    else:
+        args.subs = DEFAULT_SUBREDDITS
+        
+    print(f"[INFO] Niche Type: {args.niche_type}")
+    print(f"[INFO] Loaded {len(args.keywords)} keywords")
+    print(f"[INFO] Target Subreddits: {args.subs}")
 
     # If user didn't specify any feed types, default to search-only (most useful)
     if not (args.include_top or args.include_new or args.include_search):
@@ -416,11 +427,13 @@ def main():
     feeds = generate_all_feed_urls(
         subs=args.subs,
         keywords=args.keywords,
+        templates=args.templates,
         t=args.t,
         sort=args.sort,
         include_top=args.include_top,
         include_new=args.include_new,
         include_search=args.include_search,
+        prefix=args.prefix
     )
 
     if args.mode == "urls":

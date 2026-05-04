@@ -64,6 +64,70 @@ def next_unfinished_phase(state, phases):
 
 PHASES = ["seed", "scout", "fetch", "normalize", "gap"]
 
+def phase_runners():
+    return {
+        "seed": run_phase_seed,
+        "scout": run_phase_scout,
+        "fetch": run_phase_fetch,
+        "normalize": run_phase_normalize,
+        "gap": run_phase_gap,
+    }
+
+def print_phase_header(phase_name):
+    print(f"\n\n{'#'*60}")
+    print(f"# PHASE: {phase_name.upper()}")
+    print(f"{'#'*60}")
+
+def run_sequential_pipeline(args, run_id, state):
+    """
+    Run phases in order, deciding each phase after the previous one updates state.
+
+    The pipeline phase functions persist their own completion markers. Keeping the
+    scheduler stateful avoids skipping downstream phases in a fresh full run.
+    """
+    executed = []
+    if args.keywords and state.get("seed") != "done":
+        # keywords provided: skip seed_factory
+        state["seed"] = "done"
+        save_run_state(run_id, state)
+
+    phase_plan = [
+        (
+            "seed",
+            lambda: not args.keywords and not args.skip_seed and state.get("seed") != "done",
+        ),
+        (
+            "scout",
+            lambda: not args.skip_scout and state.get("scout") != "done",
+        ),
+        (
+            "fetch",
+            lambda: state.get("fetch") != "done",
+        ),
+        (
+            "normalize",
+            lambda: state.get("fetch") == "done" and state.get("normalize") != "done",
+        ),
+        (
+            "gap",
+            lambda: (
+                not args.skip_gap
+                and state.get("normalize") == "done"
+                and state.get("gap") != "done"
+            ),
+        ),
+    ]
+
+    for phase_name, should_run in phase_plan:
+        if not should_run():
+            continue
+        print_phase_header(phase_name)
+        phase_runners()[phase_name](args, run_id, state)
+        executed.append(phase_name)
+        time.sleep(0.5)
+
+    return executed
+
 def run_phase_seed(args, run_id, state):
     """Phase 1: Generate seed keywords."""
     if args.keywords:
@@ -236,50 +300,22 @@ def main():
     else:
         state = {}
 
+    runners = phase_runners()
+
     # Phase routing
     if args.phase:
-        phase_fn = {
-            "seed": run_phase_seed,
-            "scout": run_phase_scout,
-            "fetch": run_phase_fetch,
-            "normalize": run_phase_normalize,
-            "gap": run_phase_gap,
-        }
         print(f"\n[RUNNING SINGLE PHASE]: {args.phase}")
-        phase_fn[args.phase](args, args.run_id, state)
+        runners[args.phase](args, args.run_id, state)
         print(f"\n[DONE] Phase {args.phase} complete")
         sys.exit(0)
 
-    # Sequential pipeline
-    phases_to_run = []
-    if args.keywords:
-        # keywords provided: skip seed_factory
-        state["seed"] = "done"
-        save_run_state(args.run_id, state)
-    elif not args.skip_seed and state.get("seed") != "done":
-        phases_to_run.append(("seed", run_phase_seed))
-    if not args.skip_scout and state.get("scout") != "done":
-        phases_to_run.append(("scout", run_phase_scout))
-    if state.get("scout") == "done" or state.get("seed") == "done":
-        phases_to_run.append(("fetch", run_phase_fetch))
-    if state.get("fetch") == "done":
-        phases_to_run.append(("normalize", run_phase_normalize))
-    if not args.skip_gap and state.get("normalize") == "done":
-        phases_to_run.append(("gap", run_phase_gap))
-
-    if not phases_to_run:
+    executed_phases = run_sequential_pipeline(args, args.run_id, state)
+    if not executed_phases:
         print("[INFO] All phases already complete. Use --resume to re-run gap analysis.")
         print(f"\nResults:")
         print(f"  Normalized data: {DATA}/{args.run_id}_normalized.jsonl")
         print(f"  Gaps:            {DATA}/{args.run_id}_gaps.json")
         sys.exit(0)
-
-    for phase_name, phase_fn in phases_to_run:
-        print(f"\n\n{'#'*60}")
-        print(f"# PHASE: {phase_name.upper()}")
-        print(f"{'#'*60}")
-        phase_fn(args, args.run_id, state)
-        time.sleep(0.5)
 
     print(f"\n\n{'='*60}")
     print(f"  PIPELINE COMPLETE — {args.run_id}")

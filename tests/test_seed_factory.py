@@ -25,8 +25,8 @@ class SeedFactoryTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as raised:
                     seed_factory.main()
 
-        self.assertEqual(raised.exception.code, 1)
-        self.assertEqual(seed_path.read_text(encoding="utf-8"), original)
+            self.assertEqual(raised.exception.code, 1)
+            self.assertEqual(seed_path.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

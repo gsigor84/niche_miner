@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
@@ -99,7 +100,7 @@ def main():
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model to use")
 
     args = parser.parse_args()
-    factory = SeedFactory()
+    factory = SeedFactory(OUTPUT_FILE)
 
     if args.append:
         factory.load_existing()
@@ -109,9 +110,16 @@ def main():
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
+            sys.exit(2)
         factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
-    
+
+    if not factory.seeds:
+        print(
+            f"[ERROR] No seeds generated; refusing to overwrite {factory.output_path}.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     factory.save()
 
 

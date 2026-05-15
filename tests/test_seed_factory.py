@@ -26,9 +26,10 @@ class SeedFactoryTest(unittest.TestCase):
                         seed_factory.main()
             finally:
                 os.chdir(original_cwd)
+            contents = seed_path.read_text(encoding="utf-8")
 
         self.assertEqual(raised.exception.code, 1)
-        self.assertEqual(seed_path.read_text(encoding="utf-8"), "existing seed\n")
+        self.assertEqual(contents, "existing seed\n")
 
     def test_missing_llm_topic_exits_nonzero_without_writing_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -42,9 +43,10 @@ class SeedFactoryTest(unittest.TestCase):
                         seed_factory.main()
             finally:
                 os.chdir(original_cwd)
+            seed_exists = seed_path.exists()
 
         self.assertEqual(raised.exception.code, 2)
-        self.assertFalse(seed_path.exists())
+        self.assertFalse(seed_exists)
 
 
 if __name__ == "__main__":

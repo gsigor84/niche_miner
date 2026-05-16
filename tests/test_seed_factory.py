@@ -25,11 +25,12 @@ class SeedFactoryTests(unittest.TestCase):
                 with mock.patch.object(sys, "argv", argv), \
                         mock.patch.object(seed_factory.requests, "post", side_effect=RuntimeError("ollama down")):
                     exit_code = seed_factory.main()
+                seed_contents = seed_path.read_text(encoding="utf-8")
             finally:
                 os.chdir(old_cwd)
 
         self.assertEqual(exit_code, 1)
-        self.assertEqual(seed_path.read_text(encoding="utf-8"), "existing seed\n")
+        self.assertEqual(seed_contents, "existing seed\n")
 
     def test_empty_seed_set_is_not_saved(self):
         with tempfile.TemporaryDirectory() as tmp:

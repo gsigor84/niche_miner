@@ -383,6 +383,7 @@ def main():
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--keywords", help="Comma-separated keywords to use instead of seed_topics.txt")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
@@ -407,8 +408,13 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI override or seed_topics.txt
+    if args.keywords:
+        args.keywords = [kw.strip() for kw in args.keywords.split(",") if kw.strip()]
+        if args.prefix:
+            args.keywords = [f"{args.prefix} {kw}" for kw in args.keywords]
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
     
     # Determine subreddits
     if args.subs:

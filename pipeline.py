@@ -127,6 +127,8 @@ def run_phase_fetch(args, run_id, state):
     ]
     if args.prefix:
         cmd.extend(["--prefix", args.prefix])
+    if args.keywords:
+        cmd.extend(["--keywords", args.keywords])
     if args.only_pain_points:
         cmd.append("--only_pain_points")
     run(cmd, "PHASE 3: rss_miner")

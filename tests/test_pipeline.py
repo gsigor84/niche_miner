@@ -52,6 +52,7 @@ class PipelineTests(unittest.TestCase):
             max_posts=5,
             run_id="unit_run",
             prefix="best value",
+            keywords="crm tools, sales automation",
             only_pain_points=True,
         )
         state = {}
@@ -65,6 +66,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(captured["cmd"][0:2], ["python3", "rss_miner.py"])
         self.assertIn("--prefix", captured["cmd"])
         self.assertEqual(captured["cmd"][captured["cmd"].index("--prefix") + 1], "best value")
+        self.assertIn("--keywords", captured["cmd"])
+        self.assertEqual(captured["cmd"][captured["cmd"].index("--keywords") + 1], "crm tools, sales automation")
         self.assertIn("--only_pain_points", captured["cmd"])
         self.assertEqual(state["fetch"], "done")
 
@@ -78,6 +81,7 @@ class PipelineTests(unittest.TestCase):
             max_posts=5,
             run_id="unit_run",
             prefix=None,
+            keywords=None,
             only_pain_points=False,
         )
         state = {}

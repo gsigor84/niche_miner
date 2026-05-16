@@ -1,7 +1,16 @@
 import io
 import sys
+import types
 import unittest
 from unittest import mock
+
+feedparser_stub = types.ModuleType("feedparser")
+feedparser_stub.parse = lambda raw: None
+sys.modules.setdefault("feedparser", feedparser_stub)
+
+bs4_stub = types.ModuleType("bs4")
+bs4_stub.BeautifulSoup = lambda *args, **kwargs: None
+sys.modules.setdefault("bs4", bs4_stub)
 
 import rss_miner
 

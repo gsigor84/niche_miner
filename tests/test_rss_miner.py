@@ -6,6 +6,7 @@ from unittest import mock
 
 feedparser_stub = types.ModuleType("feedparser")
 feedparser_stub.parse = lambda raw: None
+feedparser_stub.FeedParserDict = dict
 sys.modules.setdefault("feedparser", feedparser_stub)
 
 bs4_stub = types.ModuleType("bs4")

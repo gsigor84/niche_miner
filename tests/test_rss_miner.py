@@ -5,7 +5,10 @@ import importlib.util
 from unittest import mock
 
 if importlib.util.find_spec("feedparser") is None:
-    sys.modules["feedparser"] = types.SimpleNamespace(parse=lambda raw: None)
+    sys.modules["feedparser"] = types.SimpleNamespace(
+        FeedParserDict=dict,
+        parse=lambda raw: None,
+    )
 if importlib.util.find_spec("requests") is None:
     sys.modules["requests"] = types.SimpleNamespace(
         Session=lambda: types.SimpleNamespace(headers={})

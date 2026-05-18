@@ -5,7 +5,9 @@ import unittest
 
 
 def install_optional_dependency_stubs():
-    feedparser = types.SimpleNamespace(parse=lambda raw: types.SimpleNamespace(entries=[]))
+    feedparser = types.ModuleType("feedparser")
+    feedparser.FeedParserDict = dict
+    feedparser.parse = lambda raw: types.SimpleNamespace(entries=[])
     sys.modules.setdefault("feedparser", feedparser)
 
     class BeautifulSoup:
@@ -16,14 +18,16 @@ def install_optional_dependency_stubs():
             text = str(self.html)
             return text.strip() if strip else text
 
-    bs4 = types.SimpleNamespace(BeautifulSoup=BeautifulSoup)
+    bs4 = types.ModuleType("bs4")
+    bs4.BeautifulSoup = BeautifulSoup
     sys.modules.setdefault("bs4", bs4)
 
     class FakeSession:
         def __init__(self):
             self.headers = {}
 
-    requests = types.SimpleNamespace(Session=FakeSession)
+    requests = types.ModuleType("requests")
+    requests.Session = FakeSession
     sys.modules.setdefault("requests", requests)
 
 

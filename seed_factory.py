@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
@@ -109,11 +110,19 @@ def main():
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
+            return 1
         factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
+    else:
+        print("[ERROR] Manual seed source does not generate output. Edit seed_topics.txt directly or choose --source google/llm.")
+        return 1
+
+    if not factory.seeds:
+        print(f"[ERROR] No seeds generated; refusing to overwrite {factory.output_path}.")
+        return 1
     
     factory.save()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

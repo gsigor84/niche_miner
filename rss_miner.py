@@ -62,6 +62,21 @@ def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) ->
                 keywords.append(topic)
     return keywords
 
+def parse_keywords(value: Optional[str], prefix: Optional[str] = None) -> List[str]:
+    """Parse comma-separated CLI keywords using the same prefix semantics as seed files."""
+    if not value:
+        return []
+    keywords = []
+    for item in value.split(","):
+        topic = item.strip()
+        if not topic:
+            continue
+        if prefix and not topic.lower().startswith(prefix.lower()):
+            keywords.append(f"{prefix} {topic}")
+        else:
+            keywords.append(topic)
+    return keywords
+
 
 def load_query_templates(niche_type: str) -> List[str]:
     """Load query templates for the specified niche type from JSON config."""
@@ -383,6 +398,7 @@ def main():
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--keywords", default=None, help="Comma-separated keywords to use instead of seed_topics.txt")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
@@ -407,8 +423,8 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI or seed_topics.txt
+    args.keywords = parse_keywords(args.keywords, prefix=args.prefix) or load_keywords(prefix=args.prefix)
     
     # Determine subreddits
     if args.subs:

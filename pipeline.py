@@ -120,6 +120,8 @@ def run_phase_fetch(args, run_id, state):
         "--t", "month",
         "--sleep", "1.5",
     ]
+    if args.only_pain_points:
+        cmd.append("--only_pain_points")
     if args.keywords:
         cmd.extend(["--keywords", args.keywords])
     if args.prefix:
@@ -138,9 +140,7 @@ def run_phase_normalize(args, run_id, state):
         "python3", "normalize_reddit_jsonl.py",
         "--input", str(raw),
         "--output", str(DATA / f"{args.run_id}_normalized.jsonl"),
-        "--only_pain_points" if args.only_pain_points else "",
     ]
-    cmd = [c for c in cmd if c]  # filter empty strings
     run(cmd, "PHASE 4: normalize")
     state["normalize"] = "done"
     save_run_state(run_id, state)
@@ -202,6 +202,7 @@ def parse_args():
     p.add_argument("--max_seeds", type=int, default=20, help="Max seeds to use for scouting")
     # fetch phase
     p.add_argument("--max_posts", type=int, default=10, help="Max posts per subreddit")
+    p.add_argument("--only_pain_points", action="store_true", help="Only fetch pain-point-ish posts")
     # gap phase
     p.add_argument("--top_gaps", type=int, default=20, help="Number of top gaps to report")
     p.add_argument("--min_degree", type=int, default=3, help="Min keyword degree for gap graph")

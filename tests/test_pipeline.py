@@ -68,6 +68,7 @@ class PipelineRegressionTests(unittest.TestCase):
             run_id="kw_run",
             keywords="party tickets,ai agents",
             prefix="cheap",
+            only_pain_points=False,
         )
         state = {}
         calls = []
@@ -96,6 +97,7 @@ class PipelineRegressionTests(unittest.TestCase):
             run_id="kw_run",
             keywords=None,
             prefix=None,
+            only_pain_points=False,
         )
         state = {}
 

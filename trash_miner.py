@@ -8,7 +8,7 @@ import os
 # --- SETTINGS ---
 SEED_FILE = "seed_topics.txt"
 OUTPUT_FILE = "suggested_trash_candidates.txt"
-GOOGLE_AUTO_URL = "http://suggestqueries.google.com/complete/search?client=chrome&q={}"
+GOOGLE_AUTO_URL = "http://suggestqueries.google.com/complete/search"
 # Words to exclude from frequency count (common stop words)
 STOP_WORDS = {"and", "for", "the", "with", "are", "what", "how", "you", "does", "can", "near"}
 
@@ -21,7 +21,11 @@ def load_seeds():
 
 def get_autocomplete(query):
     try:
-        response = requests.get(GOOGLE_AUTO_URL.format(query), timeout=5)
+        response = requests.get(
+            GOOGLE_AUTO_URL,
+            params={"client": "chrome", "q": query},
+            timeout=5,
+        )
         response.raise_for_status()
         data = response.json()
         # [query, [suggestions, ...], [extra_info, ...]]

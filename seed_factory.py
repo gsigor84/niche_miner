@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
@@ -35,8 +36,9 @@ class SeedFactory:
                 f.write(f"{s}\n")
         print(f"[SUCCESS] Saved {len(sorted_seeds)} seeds to {self.output_path}")
 
-    def harvest_google_taxonomy(self):
+    def harvest_google_taxonomy(self) -> bool:
         print(f"[INFO] Harvesting from Google Shopping Taxonomy...")
+        before = len(self.seeds)
         try:
             r = requests.get(GOOGLE_TAXONOMY_URL)
             r.raise_for_status()
@@ -48,11 +50,14 @@ class SeedFactory:
                 leaf = parts[-1].strip().lower().replace(" & ", " ").replace(",", "")
                 if len(leaf) > 3:
                     self.seeds.add(leaf)
+            return len(self.seeds) > before
         except Exception as e:
             print(f"[ERROR] Google taxonomy harvest failed: {e}")
+            return False
 
-    def brainstorm_llm(self, topic: str, count: int = 10, model: str = DEFAULT_MODEL):
+    def brainstorm_llm(self, topic: str, count: int = 10, model: str = DEFAULT_MODEL) -> bool:
         print(f"[INFO] Brainstorming sub-niches for '{topic}' using LLM ({model})...")
+        before = len(self.seeds)
         prompt = f"""
         Act as a market research expert. Brainstorm {count} specific sub-niches or product categories for the broad topic: "{topic}".
         Return ONLY a JSON list of strings. No preamble, no explanation.
@@ -86,8 +91,10 @@ class SeedFactory:
                 if isinstance(s, str):
                     self.seeds.add(s.lower().strip())
                     print(f"  + Added: {s}")
+            return len(self.seeds) > before
         except Exception as e:
             print(f"[ERROR] LLM brainstorming failed: {e}")
+            return False
 
 
 def main():
@@ -104,13 +111,21 @@ def main():
     if args.append:
         factory.load_existing()
 
+    generated = True
     if args.source == "google":
-        factory.harvest_google_taxonomy()
+        generated = factory.harvest_google_taxonomy()
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
-        factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
+            sys.exit(2)
+        generated = factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
+    
+    if not generated:
+        print("[ERROR] No seeds were generated; refusing to overwrite seed_topics.txt.")
+        sys.exit(1)
+    if not factory.seeds:
+        print("[ERROR] Seed set is empty; refusing to overwrite seed_topics.txt.")
+        sys.exit(1)
     
     factory.save()
 

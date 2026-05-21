@@ -2,6 +2,7 @@ import json
 import os
 import requests
 import argparse
+import sys
 from datetime import datetime
 
 # --- CONFIGURATION ---
@@ -65,7 +66,8 @@ def analyze_batch(batch, model):
         r.raise_for_status()
         return r.json().get("response", "No response from LLM.")
     except Exception as e:
-        return f"Error during analysis: {e}"
+        print(f"[ERROR] Analysis batch failed: {e}")
+        return None
 
 def generate_report(threads, model, batch_size=10):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -83,6 +85,9 @@ def generate_report(threads, model, batch_size=10):
         batch = threads[i:i+batch_size]
         print(f"  [>] Processing batch {i//batch_size + 1} ({len(batch)} threads)...")
         analysis = analyze_batch(batch, model)
+        if analysis is None:
+            print("[ERROR] Aborting report generation; no partial report was written.")
+            return None
         all_analyses.append(analysis)
 
     # Final summary of summaries
@@ -116,7 +121,9 @@ def main():
     if not threads:
         return
         
-    generate_report(threads, args.model, args.batch_size)
+    report_path = generate_report(threads, args.model, args.batch_size)
+    if report_path is None:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

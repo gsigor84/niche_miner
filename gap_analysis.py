@@ -57,11 +57,22 @@ STOPWORDS = {
     "back", "still", "take", "come", "came", "let", "first", "new", "good",
     "bad", "big", "small", "right", "wrong", "best", "worst", "high", "low",
     "sure", "maybe", "actually", "probably", "definitely", "always", "never",
+    # Reddit RSS boilerplate
+    "submitted", "comments", "comment", "link",
 }
+
+def strip_reddit_boilerplate(text):
+    """Remove Reddit RSS footer text that otherwise dominates keyword graphs."""
+    return re.sub(
+        r"\bsubmitted\s+by\s+/?u/\S+(?:\s+\[[^\]]+\])*",
+        " ",
+        text,
+        flags=re.IGNORECASE,
+    )
 
 def extract_keywords(text, top_n=50):
     """Extract significant word bigrams from text."""
-    text = text.lower()
+    text = strip_reddit_boilerplate(text).lower()
     # Remove URLs
     text = re.sub(r"https?://\S+", " ", text)
     # Remove noise patterns

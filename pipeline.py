@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -89,6 +90,13 @@ def run_phase_seed(args, run_id, state):
 
 def run_phase_scout(args, run_id, state):
     """Phase 2: Scout subreddits from seeds."""
+    if args.subs:
+        print(f"[PHASE 2] Explicit subreddits provided: {args.subs}")
+        state["subs"] = args.subs
+        state["scout"] = "done"
+        save_run_state(run_id, state)
+        return
+
     if args.keywords:
         keywords = args.keywords
         print(f"[PHASE 2] Using provided keywords: {keywords[:80]}...")
@@ -100,34 +108,61 @@ def run_phase_scout(args, run_id, state):
                  if l.strip() and not l.startswith("#")]
         keywords = ",".join(seeds[: args.max_seeds])
 
-    cmd = f"python3 scout_subreddits.py {keywords} --limit {args.max_seeds}"
+    cmd = ["python3", "scout_subreddits.py", keywords, "--limit", str(args.max_seeds)]
     print(f"\n[PHASE 2] Keywords: {keywords[:100]}...")
-    result = subprocess.run(cmd, shell=True, cwd=PROJECT, capture_output=True, text=True)
-    print(result.stdout[-2000:] if result.stdout else "")
+    result = subprocess.run(cmd, cwd=PROJECT, capture_output=True, text=True)
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+    print(stdout[-2000:] if stdout else "")
+    if stderr:
+        print(stderr[-2000:], file=sys.stderr)
     if result.returncode != 0:
-        print(f"[WARN] scout_subreddits returned {result.returncode}")
+        print(f"[FAIL] scout_subreddits returned {result.returncode}")
+        sys.exit(result.returncode)
+
+    match = re.search(r"To use with rss_miner:\s+--subs\s+([^\s]+)", stdout)
+    if not match:
+        print("[ERROR] scout_subreddits did not discover any subreddits.")
+        sys.exit(1)
+
+    state["subs"] = match.group(1)
     state["scout"] = "done"
     save_run_state(run_id, state)
 
 def run_phase_fetch(args, run_id, state):
     """Phase 3: Fetch Reddit data via rss_miner."""
-    prefix_flag = f"--prefix '{args.prefix}'" if args.prefix else ""
-    cmd = (
-        f"python3 rss_miner.py --mode fetch "
-        f"--niche_type {args.niche_type} "
-        f"--subs {args.subs or args.niche_type} "
-        f"--max_posts {args.max_posts} "
-        f"--out data/{args.run_id}_raw.jsonl "
-        f"--include_comments "
-        f"--include_top "
-        f"--include_search "
-        f"--t month "
-        f"--sleep 1.5"
-    )
-    result = subprocess.run(cmd, shell=True, cwd=PROJECT, capture_output=True, text=True)
-    print(result.stdout[-3000:] if result.stdout else "")
+    cmd = [
+        "python3", "rss_miner.py",
+        "--mode", "fetch",
+        "--niche_type", args.niche_type,
+        "--max_posts", str(args.max_posts),
+        "--out", f"data/{args.run_id}_raw.jsonl",
+        "--seen", f"data/{args.run_id}_seen_post_ids.txt",
+        "--include_comments",
+        "--include_top",
+        "--include_search",
+        "--t", "month",
+        "--sleep", "1.5",
+    ]
+    subs = args.subs or state.get("subs")
+    if subs:
+        cmd.extend(["--subs", subs])
+    if args.prefix:
+        cmd.extend(["--prefix", args.prefix])
+    if args.keywords:
+        cmd.extend(["--keywords", args.keywords])
+    if args.only_pain_points:
+        cmd.append("--only_pain_points")
+
+    result = subprocess.run(cmd, cwd=PROJECT, capture_output=True, text=True)
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+    print(stdout[-3000:] if stdout else "")
+    if stderr:
+        print(stderr[-3000:], file=sys.stderr)
     if result.returncode != 0:
-        print(f"[WARN] rss_miner returned {result.returncode}")
+        print(f"[FAIL] rss_miner returned {result.returncode}")
+        sys.exit(result.returncode)
     state["fetch"] = "done"
     save_run_state(run_id, state)
 
@@ -141,9 +176,7 @@ def run_phase_normalize(args, run_id, state):
         "python3", "normalize_reddit_jsonl.py",
         "--input", str(raw),
         "--output", str(DATA / f"{args.run_id}_normalized.jsonl"),
-        "--only_pain_points" if args.only_pain_points else "",
     ]
-    cmd = [c for c in cmd if c]  # filter empty strings
     run(cmd, "PHASE 4: normalize")
     state["normalize"] = "done"
     save_run_state(run_id, state)
@@ -167,7 +200,7 @@ def run_phase_gap(args, run_id, state):
     ]
     if args.viz:
         cmd.append("--viz")
-    run(cmd, "PHASE 5: gap_analysis", check=False)
+    run(cmd, "PHASE 5: gap_analysis")
     state["gap"] = "done"
     save_run_state(run_id, state)
 
@@ -176,7 +209,8 @@ def run_phase_gap(args, run_id, state):
 def parse_args():
     p = argparse.ArgumentParser(description="Trash Miner Pipeline Orchestrator")
     p.add_argument("--run_id", default=None, help="Unique run ID (auto-generated if omitted)")
-    p.add_argument("--topic", default=None, help="Topic for seed_factory (LLM brainstorming)")
+    p.add_argument("--topic", "--niche", dest="topic", default=None,
+                   help="Topic for seed_factory (LLM brainstorming)")
     p.add_argument("--keywords", default=None, help="Comma-separated keywords for Reddit scouting (bypasses seed_factory)")
     p.add_argument("--niche_type", default="saas",
                    choices=NICHE_TYPES, help="Niche type for query packs")
@@ -189,6 +223,8 @@ def parse_args():
     p.add_argument("--max_seeds", type=int, default=20, help="Max seeds to use for scouting")
     # fetch phase
     p.add_argument("--max_posts", type=int, default=10, help="Max posts per subreddit")
+    p.add_argument("--only_pain_points", action="store_true",
+                   help="Only save pain-point-ish posts during fetch")
     # gap phase
     p.add_argument("--top_gaps", type=int, default=20, help="Number of top gaps to report")
     p.add_argument("--min_degree", type=int, default=3, help="Min keyword degree for gap graph")
@@ -250,22 +286,20 @@ def main():
         print(f"\n[DONE] Phase {args.phase} complete")
         sys.exit(0)
 
-    # Sequential pipeline
-    phases_to_run = []
-    if args.keywords:
-        # keywords provided: skip seed_factory
-        state["seed"] = "done"
-        save_run_state(args.run_id, state)
-    elif not args.skip_seed and state.get("seed") != "done":
-        phases_to_run.append(("seed", run_phase_seed))
-    if not args.skip_scout and state.get("scout") != "done":
-        phases_to_run.append(("scout", run_phase_scout))
-    if state.get("scout") == "done" or state.get("seed") == "done":
-        phases_to_run.append(("fetch", run_phase_fetch))
-    if state.get("fetch") == "done":
-        phases_to_run.append(("normalize", run_phase_normalize))
-    if not args.skip_gap and state.get("normalize") == "done":
-        phases_to_run.append(("gap", run_phase_gap))
+    # Sequential pipeline. Plan by phase order, not the pre-run state; each
+    # phase updates state as it succeeds, and completed phases are skipped.
+    phase_plan = [
+        ("seed", run_phase_seed, args.skip_seed),
+        ("scout", run_phase_scout, args.skip_scout),
+        ("fetch", run_phase_fetch, False),
+        ("normalize", run_phase_normalize, False),
+        ("gap", run_phase_gap, args.skip_gap),
+    ]
+    phases_to_run = [
+        (name, fn)
+        for name, fn, should_skip in phase_plan
+        if not should_skip and state.get(name) != "done"
+    ]
 
     if not phases_to_run:
         print("[INFO] All phases already complete. Use --resume to re-run gap analysis.")

@@ -1,11 +1,12 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
     import urllib.request as requests # Minimal fallback if needed, but requests is expected
 from pathlib import Path
-from typing import List, Set
+from typing import List, Optional, Set
 
 # --- CONFIGURATION ---
 OUTPUT_FILE = "seed_topics.txt"
@@ -15,8 +16,8 @@ DEFAULT_MODEL = "llama3.2:3b"
 
 
 class SeedFactory:
-    def __init__(self, output_path: str = OUTPUT_FILE):
-        self.output_path = Path(output_path)
+    def __init__(self, output_path: Optional[str] = None):
+        self.output_path = Path(output_path or OUTPUT_FILE)
         self.seeds: Set[str] = set()
 
     def load_existing(self):
@@ -109,9 +110,13 @@ def main():
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
+            sys.exit(2)
         factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
-    
+
+    if not factory.seeds:
+        print("[ERROR] No seeds generated; leaving existing seed file unchanged.")
+        sys.exit(1)
+
     factory.save()
 
 

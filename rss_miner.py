@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,18 @@ def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) ->
                 keywords.append(f"{prefix} {topic}")
             else:
                 keywords.append(topic)
+    return keywords
+
+def parse_keyword_arg(raw: Optional[str], prefix: Optional[str] = None) -> List[str]:
+    """Parse explicit CLI keywords, mirroring seed file prefix handling."""
+    if not raw:
+        return []
+    keywords = []
+    for topic in raw.split(","):
+        topic = topic.strip()
+        if not topic:
+            continue
+        keywords.append(f"{prefix} {topic}" if prefix else topic)
     return keywords
 
 
@@ -383,6 +396,7 @@ def main():
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--keywords", default=None, help="Comma-separated keywords to use instead of seed_topics.txt")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
@@ -407,22 +421,28 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
-    
     # Determine subreddits
     if args.subs:
         args.subs = [s.strip() for s in args.subs.split(",") if s.strip()]
     else:
         args.subs = DEFAULT_SUBREDDITS
-        
-    print(f"[INFO] Niche Type: {args.niche_type}")
-    print(f"[INFO] Loaded {len(args.keywords)} keywords")
-    print(f"[INFO] Target Subreddits: {args.subs}")
+
+    if args.keywords:
+        args.keywords = parse_keyword_arg(args.keywords, prefix=args.prefix)
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
 
     # If user didn't specify any feed types, default to search-only (most useful)
     if not (args.include_top or args.include_new or args.include_search):
         args.include_search = True
+
+    if args.include_search and not args.keywords:
+        print("[ERROR] No keywords available for search feeds.", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"[INFO] Niche Type: {args.niche_type}")
+    print(f"[INFO] Loaded {len(args.keywords)} keywords")
+    print(f"[INFO] Target Subreddits: {args.subs}")
 
     feeds = generate_all_feed_urls(
         subs=args.subs,

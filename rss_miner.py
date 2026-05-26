@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -296,7 +297,7 @@ def generate_all_feed_urls(
 
 def run_fetch(args):
     out_path = Path(args.out)
-    seen_path = Path(args.seen)
+    seen_path = Path(args.seen) if args.seen else out_path.with_name(f"{out_path.stem}_seen_post_ids.txt")
     seen_ids = load_seen_ids(seen_path)
 
     feeds = generate_all_feed_urls(
@@ -383,6 +384,7 @@ def main():
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--keywords", default=None, help="Comma-separated keywords to use instead of seed_topics.txt")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
@@ -395,7 +397,7 @@ def main():
     ap.add_argument("--sleep", type=float, default=0.9, help="Delay between requests")
 
     ap.add_argument("--out", default="data/reddit_threads.jsonl", help="Output JSONL")
-    ap.add_argument("--seen", default="data/seen_post_ids.txt", help="Dedupe file")
+    ap.add_argument("--seen", default=None, help="Dedupe file (default: sidecar file next to --out)")
 
     # toggles
     ap.add_argument("--include_top", action="store_true", help="Include subreddit top.rss")
@@ -407,8 +409,13 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI or seed_topics.txt
+    if args.keywords is not None:
+        args.keywords = [k.strip() for k in args.keywords.split(",") if k.strip()]
+        if args.prefix:
+            args.keywords = [f"{args.prefix} {kw}" for kw in args.keywords]
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
     
     # Determine subreddits
     if args.subs:
@@ -423,6 +430,10 @@ def main():
     # If user didn't specify any feed types, default to search-only (most useful)
     if not (args.include_top or args.include_new or args.include_search):
         args.include_search = True
+
+    if args.include_search and not args.keywords:
+        print("[ERROR] Search feeds require at least one keyword via --keywords or seed_topics.txt.", file=sys.stderr)
+        sys.exit(1)
 
     feeds = generate_all_feed_urls(
         subs=args.subs,

@@ -87,7 +87,8 @@ class PipelineCriticalFixTests(unittest.TestCase):
         )
         state = {"scouted_subs": "events,ticketing"}
 
-        with mock.patch.object(pipeline, "run", fake_run):
+        with mock.patch.object(pipeline, "run", fake_run), \
+            mock.patch.object(pipeline, "save_run_state", lambda run_id, state: None):
             pipeline.run_phase_fetch(args, args.run_id, state)
 
         cmd = recorded["cmd"]

@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -53,6 +54,28 @@ def save_run_state(run_id, state):
     ensure_dir(RUNS / run_id)
     (RUNS / run_id / "state.json").write_text(json.dumps(state, indent=2))
 
+def run_dir(run_id):
+    return RUNS / run_id
+
+def scout_subs_file(run_id):
+    return run_dir(run_id) / "scout_subs.txt"
+
+def read_scout_subs(run_id):
+    path = scout_subs_file(run_id)
+    if not path.exists():
+        return None
+    subs = path.read_text(encoding="utf-8").strip()
+    return subs or None
+
+def parse_scout_subs(stdout):
+    match = re.search(r"To use with rss_miner:\s+--subs\s+([^\s]+)", stdout or "")
+    return match.group(1).strip() if match else None
+
+def require_output(path, label):
+    if not path.exists() or path.stat().st_size == 0:
+        print(f"[FAIL] {label} did not create a non-empty output: {path}")
+        sys.exit(1)
+
 def next_unfinished_phase(state, phases):
     """Return the next phase not yet marked 'done'."""
     for p in phases:
@@ -77,11 +100,13 @@ def run_phase_seed(args, run_id, state):
             "--source", "llm",
             "--topic", args.topic,
             "--count", str(args.seed_count),
+            "--append",
         ]
     else:
         cmd = [
             "python3", "seed_factory.py",
             "--source", "google",
+            "--append",
         ]
     run(cmd, "PHASE 1: seed_factory")
     state["seed"] = "done"
@@ -89,6 +114,14 @@ def run_phase_seed(args, run_id, state):
 
 def run_phase_scout(args, run_id, state):
     """Phase 2: Scout subreddits from seeds."""
+    if args.subs:
+        ensure_dir(run_dir(run_id))
+        scout_subs_file(run_id).write_text(args.subs + "\n", encoding="utf-8")
+        print(f"[SKIP] Using provided subreddits: {args.subs}")
+        state["scout"] = "done"
+        save_run_state(run_id, state)
+        return
+
     if args.keywords:
         keywords = args.keywords
         print(f"[PHASE 2] Using provided keywords: {keywords[:80]}...")
@@ -100,34 +133,59 @@ def run_phase_scout(args, run_id, state):
                  if l.strip() and not l.startswith("#")]
         keywords = ",".join(seeds[: args.max_seeds])
 
-    cmd = f"python3 scout_subreddits.py {keywords} --limit {args.max_seeds}"
+    cmd = ["python3", "scout_subreddits.py", keywords, "--limit", str(args.max_seeds)]
     print(f"\n[PHASE 2] Keywords: {keywords[:100]}...")
-    result = subprocess.run(cmd, shell=True, cwd=PROJECT, capture_output=True, text=True)
+    result = subprocess.run(cmd, cwd=PROJECT, capture_output=True, text=True)
     print(result.stdout[-2000:] if result.stdout else "")
     if result.returncode != 0:
-        print(f"[WARN] scout_subreddits returned {result.returncode}")
+        print(f"[FAIL] scout_subreddits returned {result.returncode}")
+        sys.exit(1)
+    discovered_subs = parse_scout_subs(result.stdout)
+    if not discovered_subs:
+        print("[FAIL] scout_subreddits did not discover any subreddits; pass --subs or broader keywords.")
+        sys.exit(1)
+    ensure_dir(run_dir(run_id))
+    scout_subs_file(run_id).write_text(discovered_subs + "\n", encoding="utf-8")
+    print(f"[OK] Saved discovered subreddits: {discovered_subs}")
     state["scout"] = "done"
     save_run_state(run_id, state)
 
 def run_phase_fetch(args, run_id, state):
     """Phase 3: Fetch Reddit data via rss_miner."""
-    prefix_flag = f"--prefix '{args.prefix}'" if args.prefix else ""
-    cmd = (
-        f"python3 rss_miner.py --mode fetch "
-        f"--niche_type {args.niche_type} "
-        f"--subs {args.subs or args.niche_type} "
-        f"--max_posts {args.max_posts} "
-        f"--out data/{args.run_id}_raw.jsonl "
-        f"--include_comments "
-        f"--include_top "
-        f"--include_search "
-        f"--t month "
-        f"--sleep 1.5"
-    )
-    result = subprocess.run(cmd, shell=True, cwd=PROJECT, capture_output=True, text=True)
+    subs = args.subs or read_scout_subs(run_id)
+    if not subs:
+        print("[FAIL] No subreddits available for fetch; run scout first or pass --subs.")
+        sys.exit(1)
+
+    raw = DATA / f"{args.run_id}_raw.jsonl"
+    cmd = [
+        "python3", "rss_miner.py",
+        "--mode", "fetch",
+        "--niche_type", args.niche_type,
+        "--subs", subs,
+        "--max_posts", str(args.max_posts),
+        "--out", str(raw.relative_to(PROJECT)),
+        "--seen", str((DATA / f"{args.run_id}_seen_post_ids.txt").relative_to(PROJECT)),
+        "--include_comments",
+        "--include_top",
+        "--include_search",
+        "--t", "month",
+        "--sleep", "1.5",
+        "--max_keywords", str(args.max_seeds),
+    ]
+    if args.prefix:
+        cmd.extend(["--prefix", args.prefix])
+    if args.keywords:
+        cmd.extend(["--keywords", args.keywords])
+    if args.only_pain_points:
+        cmd.append("--only_pain_points")
+
+    result = subprocess.run(cmd, cwd=PROJECT, capture_output=True, text=True)
     print(result.stdout[-3000:] if result.stdout else "")
     if result.returncode != 0:
-        print(f"[WARN] rss_miner returned {result.returncode}")
+        print(f"[FAIL] rss_miner returned {result.returncode}")
+        sys.exit(1)
+    require_output(raw, "rss_miner")
     state["fetch"] = "done"
     save_run_state(run_id, state)
 
@@ -141,10 +199,11 @@ def run_phase_normalize(args, run_id, state):
         "python3", "normalize_reddit_jsonl.py",
         "--input", str(raw),
         "--output", str(DATA / f"{args.run_id}_normalized.jsonl"),
-        "--only_pain_points" if args.only_pain_points else "",
+        "--dedupe",
+        "--add_derived_fields",
     ]
-    cmd = [c for c in cmd if c]  # filter empty strings
     run(cmd, "PHASE 4: normalize")
+    require_output(DATA / f"{args.run_id}_normalized.jsonl", "normalize")
     state["normalize"] = "done"
     save_run_state(run_id, state)
 
@@ -167,7 +226,8 @@ def run_phase_gap(args, run_id, state):
     ]
     if args.viz:
         cmd.append("--viz")
-    run(cmd, "PHASE 5: gap_analysis", check=False)
+    run(cmd, "PHASE 5: gap_analysis")
+    require_output(gap_output, "gap_analysis")
     state["gap"] = "done"
     save_run_state(run_id, state)
 
@@ -189,6 +249,7 @@ def parse_args():
     p.add_argument("--max_seeds", type=int, default=20, help="Max seeds to use for scouting")
     # fetch phase
     p.add_argument("--max_posts", type=int, default=10, help="Max posts per subreddit")
+    p.add_argument("--only_pain_points", action="store_true", help="Only save pain-point-ish posts during fetch")
     # gap phase
     p.add_argument("--top_gaps", type=int, default=20, help="Number of top gaps to report")
     p.add_argument("--min_degree", type=int, default=3, help="Min keyword degree for gap graph")
@@ -250,31 +311,32 @@ def main():
         print(f"\n[DONE] Phase {args.phase} complete")
         sys.exit(0)
 
-    # Sequential pipeline
-    phases_to_run = []
     if args.keywords:
         # keywords provided: skip seed_factory
         state["seed"] = "done"
         save_run_state(args.run_id, state)
-    elif not args.skip_seed and state.get("seed") != "done":
+
+    phases_to_run = []
+    if not args.skip_seed and not args.keywords:
         phases_to_run.append(("seed", run_phase_seed))
-    if not args.skip_scout and state.get("scout") != "done":
+    if not args.skip_scout:
         phases_to_run.append(("scout", run_phase_scout))
-    if state.get("scout") == "done" or state.get("seed") == "done":
-        phases_to_run.append(("fetch", run_phase_fetch))
-    if state.get("fetch") == "done":
-        phases_to_run.append(("normalize", run_phase_normalize))
-    if not args.skip_gap and state.get("normalize") == "done":
+    phases_to_run.extend([
+        ("fetch", run_phase_fetch),
+        ("normalize", run_phase_normalize),
+    ])
+    if not args.skip_gap:
         phases_to_run.append(("gap", run_phase_gap))
 
-    if not phases_to_run:
+    pending_phases = [(name, fn) for name, fn in phases_to_run if state.get(name) != "done"]
+    if not pending_phases:
         print("[INFO] All phases already complete. Use --resume to re-run gap analysis.")
         print(f"\nResults:")
         print(f"  Normalized data: {DATA}/{args.run_id}_normalized.jsonl")
         print(f"  Gaps:            {DATA}/{args.run_id}_gaps.json")
         sys.exit(0)
 
-    for phase_name, phase_fn in phases_to_run:
+    for phase_name, phase_fn in pending_phases:
         print(f"\n\n{'#'*60}")
         print(f"# PHASE: {phase_name.upper()}")
         print(f"{'#'*60}")

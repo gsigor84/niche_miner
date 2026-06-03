@@ -51,9 +51,9 @@ def split_keywords(value: str, prefix: Optional[str] = None) -> List[str]:
     """Parse comma-separated keywords and optionally add a prefix."""
     return [apply_prefix(kw.strip(), prefix) for kw in value.split(",") if kw.strip()]
 
-def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) -> List[str]:
+def load_keywords(path: Optional[str] = None, prefix: Optional[str] = None) -> List[str]:
     """Read seed topics and optionally add a prefix."""
-    filepath = Path(path)
+    filepath = Path(path or SEED_TOPICS_FILE)
     if not filepath.exists():
         print(f"[ERROR] Seed file not found: {filepath}")
         return []

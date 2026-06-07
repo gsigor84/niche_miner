@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
@@ -35,8 +36,9 @@ class SeedFactory:
                 f.write(f"{s}\n")
         print(f"[SUCCESS] Saved {len(sorted_seeds)} seeds to {self.output_path}")
 
-    def harvest_google_taxonomy(self):
+    def harvest_google_taxonomy(self) -> int:
         print(f"[INFO] Harvesting from Google Shopping Taxonomy...")
+        before = len(self.seeds)
         try:
             r = requests.get(GOOGLE_TAXONOMY_URL)
             r.raise_for_status()
@@ -50,9 +52,12 @@ class SeedFactory:
                     self.seeds.add(leaf)
         except Exception as e:
             print(f"[ERROR] Google taxonomy harvest failed: {e}")
+            return 0
+        return len(self.seeds) - before
 
-    def brainstorm_llm(self, topic: str, count: int = 10, model: str = DEFAULT_MODEL):
+    def brainstorm_llm(self, topic: str, count: int = 10, model: str = DEFAULT_MODEL) -> int:
         print(f"[INFO] Brainstorming sub-niches for '{topic}' using LLM ({model})...")
+        before = len(self.seeds)
         prompt = f"""
         Act as a market research expert. Brainstorm {count} specific sub-niches or product categories for the broad topic: "{topic}".
         Return ONLY a JSON list of strings. No preamble, no explanation.
@@ -88,6 +93,8 @@ class SeedFactory:
                     print(f"  + Added: {s}")
         except Exception as e:
             print(f"[ERROR] LLM brainstorming failed: {e}")
+            return 0
+        return len(self.seeds) - before
 
 
 def main():
@@ -104,14 +111,19 @@ def main():
     if args.append:
         factory.load_existing()
 
+    added = 0
     if args.source == "google":
-        factory.harvest_google_taxonomy()
+        added = factory.harvest_google_taxonomy()
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
-        factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
+            sys.exit(2)
+        added = factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
     
+    if added <= 0:
+        print("[ERROR] No new seeds generated; leaving seed file unchanged.")
+        sys.exit(1)
+
     factory.save()
 
 

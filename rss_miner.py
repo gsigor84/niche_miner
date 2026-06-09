@@ -63,6 +63,20 @@ def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) ->
     return keywords
 
 
+def parse_keywords(value: str, prefix: Optional[str] = None) -> List[str]:
+    """Parse comma-separated CLI keywords, mirroring load_keywords prefix behavior."""
+    keywords = []
+    for item in (value or "").split(","):
+        topic = item.strip()
+        if not topic:
+            continue
+        if prefix and not topic.lower().startswith(prefix.lower()):
+            keywords.append(f"{prefix} {topic}")
+        else:
+            keywords.append(topic)
+    return keywords
+
+
 def load_query_templates(niche_type: str) -> List[str]:
     """Load query templates for the specified niche type from JSON config."""
     path = Path(QUERY_PACKS_FILE)
@@ -384,6 +398,8 @@ def main():
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
+    ap.add_argument("--keywords", default=None, help="Comma-separated keywords to use instead of seed_topics.txt")
+    ap.add_argument("--max_keywords", type=int, default=None, help="Limit loaded keywords")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
     ap.add_argument("--sort", default="top", choices=["top", "new", "relevance", "comments"], help="Search sort mode")
@@ -407,8 +423,13 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI or seed_topics.txt
+    if args.keywords:
+        args.keywords = parse_keywords(args.keywords, prefix=args.prefix)
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
+    if args.max_keywords is not None:
+        args.keywords = args.keywords[: args.max_keywords]
     
     # Determine subreddits
     if args.subs:

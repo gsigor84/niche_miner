@@ -16,7 +16,6 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import networkx as nx
-import numpy as np
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 

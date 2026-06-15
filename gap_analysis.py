@@ -275,7 +275,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        raise SystemExit(1)
     
     print(f"Loaded {len(posts)} posts")
     

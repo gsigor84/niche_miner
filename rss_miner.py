@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,16 @@ def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) ->
                 keywords.append(f"{prefix} {topic}")
             else:
                 keywords.append(topic)
+    return keywords
+
+def parse_cli_keywords(raw_keywords: str, prefix: Optional[str] = None) -> List[str]:
+    """Parse comma-separated CLI keywords using the same prefix behavior as seed files."""
+    keywords = []
+    for keyword in raw_keywords.split(","):
+        keyword = keyword.strip()
+        if not keyword:
+            continue
+        keywords.append(f"{prefix} {keyword}" if prefix else keyword)
     return keywords
 
 
@@ -315,6 +326,10 @@ def run_fetch(args):
     print(f"Output JSONL: {out_path}")
     print(f"Seen IDs: {seen_path}")
 
+    if not feeds:
+        print("[ERROR] No feeds to fetch. Check keywords, subreddits, and feed toggles.")
+        sys.exit(1)
+
     for sub, feed_type, url in feeds:
         print(f"\n[{sub}] {feed_type}: {url}")
         try:
@@ -383,6 +398,8 @@ def main():
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--keywords", default=None, help="Comma-separated keywords to use instead of seed_topics.txt")
+    ap.add_argument("--max_keywords", type=int, default=None, help="Limit number of keywords loaded for this run")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
@@ -407,22 +424,33 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # If user didn't specify any feed types, default to search-only (most useful)
+    if not (args.include_top or args.include_new or args.include_search):
+        args.include_search = True
+
+    # Load keywords from CLI or seed_topics.txt.
+    if args.keywords:
+        args.keywords = parse_cli_keywords(args.keywords, prefix=args.prefix)
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
+    if args.max_keywords is not None:
+        args.keywords = args.keywords[:args.max_keywords]
+    if args.include_search and not args.keywords:
+        print("[ERROR] Search feeds require at least one keyword.")
+        sys.exit(1)
     
     # Determine subreddits
     if args.subs:
         args.subs = [s.strip() for s in args.subs.split(",") if s.strip()]
     else:
         args.subs = DEFAULT_SUBREDDITS
+    if not args.subs:
+        print("[ERROR] At least one subreddit is required.")
+        sys.exit(1)
         
     print(f"[INFO] Niche Type: {args.niche_type}")
     print(f"[INFO] Loaded {len(args.keywords)} keywords")
     print(f"[INFO] Target Subreddits: {args.subs}")
-
-    # If user didn't specify any feed types, default to search-only (most useful)
-    if not (args.include_top or args.include_new or args.include_search):
-        args.include_search = True
 
     feeds = generate_all_feed_urls(
         subs=args.subs,

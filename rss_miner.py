@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,13 @@ def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) ->
                 keywords.append(f"{prefix} {topic}")
             else:
                 keywords.append(topic)
+    return keywords
+
+def parse_keywords(value: Optional[str], prefix: Optional[str] = None) -> List[str]:
+    """Parse comma-separated CLI keywords and optionally add a prefix."""
+    keywords = [item.strip() for item in (value or "").split(",") if item.strip()]
+    if prefix:
+        keywords = [f"{prefix} {kw}" for kw in keywords]
     return keywords
 
 
@@ -299,6 +307,10 @@ def run_fetch(args):
     seen_path = Path(args.seen)
     seen_ids = load_seen_ids(seen_path)
 
+    if args.include_search and not args.keywords:
+        print("[ERROR] Search feeds require at least one keyword.")
+        raise SystemExit(1)
+
     feeds = generate_all_feed_urls(
         subs=args.subs,
         keywords=args.keywords,
@@ -314,6 +326,10 @@ def run_fetch(args):
     print(f"Feeds to fetch: {len(feeds)}")
     print(f"Output JSONL: {out_path}")
     print(f"Seen IDs: {seen_path}")
+
+    if not feeds:
+        print("[ERROR] No feeds generated; nothing to fetch.")
+        raise SystemExit(1)
 
     for sub, feed_type, url in feeds:
         print(f"\n[{sub}] {feed_type}: {url}")
@@ -374,6 +390,10 @@ def run_fetch(args):
             print(f"  saved: {post_id} | {title[:90]}")
             polite_sleep(args.sleep)
 
+    if not out_path.exists() or out_path.stat().st_size == 0:
+        print(f"[ERROR] No posts were saved to {out_path}.")
+        raise SystemExit(1)
+
     print("\nDone.")
 
 
@@ -384,11 +404,13 @@ def main():
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
+    ap.add_argument("--keywords", help="Comma-separated keywords to use instead of seed_topics.txt")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
     ap.add_argument("--sort", default="top", choices=["top", "new", "relevance", "comments"], help="Search sort mode")
 
     ap.add_argument("--max_posts", type=int, default=20, help="Max posts per feed request")
+    ap.add_argument("--max_keywords", type=int, default=None, help="Max keywords to use")
     ap.add_argument("--include_comments", action="store_true", help="Fetch comments RSS for each post")
     ap.add_argument("--max_comments", type=int, default=10, help="Max comments per post")
     ap.add_argument("--only_pain_points", action="store_true", help="Only save pain-point-ish posts")
@@ -407,8 +429,13 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from explicit CLI input or seed_topics.txt.
+    if args.keywords:
+        args.keywords = parse_keywords(args.keywords, prefix=args.prefix)
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
+    if args.max_keywords is not None:
+        args.keywords = args.keywords[:args.max_keywords]
     
     # Determine subreddits
     if args.subs:
@@ -437,6 +464,9 @@ def main():
     )
 
     if args.mode == "urls":
+        if args.include_search and not args.keywords:
+            print("[ERROR] Search feeds require at least one keyword.")
+            sys.exit(1)
         print(f"Total URLs: {len(feeds)}\n")
         for sub, feed_type, url in feeds:
             print(f"{sub}\t{feed_type}\t{url}")

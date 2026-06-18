@@ -139,6 +139,7 @@ class CriticalFixTests(unittest.TestCase):
             )
 
             with mock.patch.object(pipeline, "DATA", data_dir), \
+                 mock.patch.object(pipeline, "RUNS", Path(tmp) / "runs"), \
                  mock.patch.object(pipeline, "run", fake_run):
                 pipeline.run_phase_fetch(args, "fetch_safe", {"subs": "CRM"})
 

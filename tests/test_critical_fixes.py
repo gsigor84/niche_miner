@@ -100,9 +100,9 @@ class PipelineCriticalFixTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as cm:
                     pipeline.main()
 
-        self.assertEqual(cm.exception.code, 0)
-        state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
-        self.assertEqual(state, {"seed": "done", "scout": "done", "gap": "done"})
+            self.assertEqual(cm.exception.code, 0)
+            state = json.loads((run_dir / "state.json").read_text(encoding="utf-8"))
+            self.assertEqual(state, {"seed": "done", "scout": "done", "gap": "done"})
 
     def test_fetch_phase_uses_safe_argv_and_run_scoped_inputs(self):
         captured = {}

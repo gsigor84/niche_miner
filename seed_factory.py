@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
@@ -97,23 +98,34 @@ def main():
     parser.add_argument("--count", type=int, default=10, help="Number of seeds to brainstorm")
     parser.add_argument("--append", action="store_true", help="Append to existing seeds instead of overwriting")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model to use")
+    parser.add_argument("--output", default=OUTPUT_FILE, help="Seed output file")
 
     args = parser.parse_args()
-    factory = SeedFactory()
+    factory = SeedFactory(args.output)
 
     if args.append:
         factory.load_existing()
+    initial_count = len(factory.seeds)
 
     if args.source == "google":
         factory.harvest_google_taxonomy()
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
+            return 1
         factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
+
+    added_count = len(factory.seeds) - initial_count
+    if args.source in {"google", "llm"} and added_count <= 0:
+        print("[ERROR] Seed generation produced no new seeds; leaving output unchanged.")
+        return 1
+    if not factory.seeds:
+        print("[ERROR] No seeds to save; leaving output unchanged.")
+        return 1
     
     factory.save()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

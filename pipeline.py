@@ -13,6 +13,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -52,6 +53,13 @@ def load_run_state(run_id):
 def save_run_state(run_id, state):
     ensure_dir(RUNS / run_id)
     (RUNS / run_id / "state.json").write_text(json.dumps(state, indent=2))
+
+def parse_scout_subs(output):
+    """Extract the discovered subreddit CSV from scout_subreddits output."""
+    match = re.search(r"To use with rss_miner:\s+--subs\s+([^\s]+)", output or "")
+    if match:
+        return match.group(1).strip()
+    return None
 
 def next_unfinished_phase(state, phases):
     """Return the next phase not yet marked 'done'."""
@@ -100,34 +108,49 @@ def run_phase_scout(args, run_id, state):
                  if l.strip() and not l.startswith("#")]
         keywords = ",".join(seeds[: args.max_seeds])
 
-    cmd = f"python3 scout_subreddits.py {keywords} --limit {args.max_seeds}"
     print(f"\n[PHASE 2] Keywords: {keywords[:100]}...")
-    result = subprocess.run(cmd, shell=True, cwd=PROJECT, capture_output=True, text=True)
+    cmd = ["python3", "scout_subreddits.py", keywords, "--limit", str(args.max_seeds)]
+    result = subprocess.run(cmd, cwd=PROJECT, capture_output=True, text=True)
     print(result.stdout[-2000:] if result.stdout else "")
     if result.returncode != 0:
-        print(f"[WARN] scout_subreddits returned {result.returncode}")
+        print(f"[FAIL] scout_subreddits returned {result.returncode}")
+        sys.exit(result.returncode)
+    discovered_subs = parse_scout_subs(result.stdout)
+    if discovered_subs:
+        state["subs"] = discovered_subs
     state["scout"] = "done"
     save_run_state(run_id, state)
 
 def run_phase_fetch(args, run_id, state):
     """Phase 3: Fetch Reddit data via rss_miner."""
-    prefix_flag = f"--prefix '{args.prefix}'" if args.prefix else ""
-    cmd = (
-        f"python3 rss_miner.py --mode fetch "
-        f"--niche_type {args.niche_type} "
-        f"--subs {args.subs or args.niche_type} "
-        f"--max_posts {args.max_posts} "
-        f"--out data/{args.run_id}_raw.jsonl "
-        f"--include_comments "
-        f"--include_top "
-        f"--include_search "
-        f"--t month "
-        f"--sleep 1.5"
-    )
-    result = subprocess.run(cmd, shell=True, cwd=PROJECT, capture_output=True, text=True)
-    print(result.stdout[-3000:] if result.stdout else "")
-    if result.returncode != 0:
-        print(f"[WARN] rss_miner returned {result.returncode}")
+    raw_path = DATA / f"{args.run_id}_raw.jsonl"
+    seen_path = DATA / f"{args.run_id}_seen_post_ids.txt"
+    cmd = [
+        "python3", "rss_miner.py",
+        "--mode", "fetch",
+        "--niche_type", args.niche_type,
+        "--max_posts", str(args.max_posts),
+        "--out", str(raw_path),
+        "--seen", str(seen_path),
+        "--include_comments",
+        "--include_top",
+        "--include_search",
+        "--t", "month",
+        "--sleep", "1.5",
+    ]
+    subs = args.subs or state.get("subs")
+    if subs:
+        cmd.extend(["--subs", subs])
+    if args.keywords:
+        cmd.extend(["--keywords", args.keywords])
+    if args.prefix:
+        cmd.extend(["--prefix", args.prefix])
+    if args.only_pain_points:
+        cmd.append("--only_pain_points")
+    result = run(cmd, "PHASE 3: rss_miner")
+    if not raw_path.exists() or raw_path.stat().st_size == 0:
+        print(f"[FAIL] rss_miner produced no raw output: {raw_path}")
+        sys.exit(1)
     state["fetch"] = "done"
     save_run_state(run_id, state)
 
@@ -141,9 +164,7 @@ def run_phase_normalize(args, run_id, state):
         "python3", "normalize_reddit_jsonl.py",
         "--input", str(raw),
         "--output", str(DATA / f"{args.run_id}_normalized.jsonl"),
-        "--only_pain_points" if args.only_pain_points else "",
     ]
-    cmd = [c for c in cmd if c]  # filter empty strings
     run(cmd, "PHASE 4: normalize")
     state["normalize"] = "done"
     save_run_state(run_id, state)
@@ -167,7 +188,7 @@ def run_phase_gap(args, run_id, state):
     ]
     if args.viz:
         cmd.append("--viz")
-    run(cmd, "PHASE 5: gap_analysis", check=False)
+    run(cmd, "PHASE 5: gap_analysis")
     state["gap"] = "done"
     save_run_state(run_id, state)
 
@@ -189,6 +210,7 @@ def parse_args():
     p.add_argument("--max_seeds", type=int, default=20, help="Max seeds to use for scouting")
     # fetch phase
     p.add_argument("--max_posts", type=int, default=10, help="Max posts per subreddit")
+    p.add_argument("--only_pain_points", action="store_true", help="Only fetch pain-point-ish posts")
     # gap phase
     p.add_argument("--top_gaps", type=int, default=20, help="Number of top gaps to report")
     p.add_argument("--min_degree", type=int, default=3, help="Min keyword degree for gap graph")
@@ -228,7 +250,7 @@ def main():
     print(f"  Viz:        {args.viz}")
     print('='*60)
 
-    if args.resume:
+    if args.resume or args.phase:
         state = load_run_state(args.run_id)
         if not state:
             print(f"[WARN] No saved state for {args.run_id}, starting fresh")
@@ -260,11 +282,11 @@ def main():
         phases_to_run.append(("seed", run_phase_seed))
     if not args.skip_scout and state.get("scout") != "done":
         phases_to_run.append(("scout", run_phase_scout))
-    if state.get("scout") == "done" or state.get("seed") == "done":
+    if state.get("fetch") != "done":
         phases_to_run.append(("fetch", run_phase_fetch))
-    if state.get("fetch") == "done":
+    if state.get("normalize") != "done":
         phases_to_run.append(("normalize", run_phase_normalize))
-    if not args.skip_gap and state.get("normalize") == "done":
+    if not args.skip_gap and state.get("gap") != "done":
         phases_to_run.append(("gap", run_phase_gap))
 
     if not phases_to_run:

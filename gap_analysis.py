@@ -12,11 +12,11 @@ Usage:
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
 import networkx as nx
-import numpy as np
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -275,7 +275,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        sys.exit(1)
     
     print(f"Loaded {len(posts)} posts")
     

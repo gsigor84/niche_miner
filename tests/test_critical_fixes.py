@@ -115,7 +115,7 @@ class SeedFactoryCriticalFixTests(unittest.TestCase):
             ]
 
             with mock.patch.object(sys, "argv", argv), \
-                    mock.patch.object(seed_factory.requests, "post", side_effect=RuntimeError("down")):
+                    mock.patch.object(seed_factory.requests, "post", side_effect=RuntimeError("down"), create=True):
                 with self.assertRaises(SystemExit) as cm:
                     seed_factory.main()
 

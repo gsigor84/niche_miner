@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
@@ -37,6 +38,7 @@ class SeedFactory:
 
     def harvest_google_taxonomy(self):
         print(f"[INFO] Harvesting from Google Shopping Taxonomy...")
+        added = 0
         try:
             r = requests.get(GOOGLE_TAXONOMY_URL)
             r.raise_for_status()
@@ -46,13 +48,16 @@ class SeedFactory:
                     continue
                 parts = line.split(">")
                 leaf = parts[-1].strip().lower().replace(" & ", " ").replace(",", "")
-                if len(leaf) > 3:
+                if len(leaf) > 3 and leaf not in self.seeds:
                     self.seeds.add(leaf)
+                    added += 1
         except Exception as e:
             print(f"[ERROR] Google taxonomy harvest failed: {e}")
+        return added
 
     def brainstorm_llm(self, topic: str, count: int = 10, model: str = DEFAULT_MODEL):
         print(f"[INFO] Brainstorming sub-niches for '{topic}' using LLM ({model})...")
+        added = 0
         prompt = f"""
         Act as a market research expert. Brainstorm {count} specific sub-niches or product categories for the broad topic: "{topic}".
         Return ONLY a JSON list of strings. No preamble, no explanation.
@@ -84,10 +89,14 @@ class SeedFactory:
             
             for s in items:
                 if isinstance(s, str):
-                    self.seeds.add(s.lower().strip())
-                    print(f"  + Added: {s}")
+                    seed = s.lower().strip()
+                    if seed and seed not in self.seeds:
+                        self.seeds.add(seed)
+                        added += 1
+                        print(f"  + Added: {s}")
         except Exception as e:
             print(f"[ERROR] LLM brainstorming failed: {e}")
+        return added
 
 
 def main():
@@ -97,20 +106,29 @@ def main():
     parser.add_argument("--count", type=int, default=10, help="Number of seeds to brainstorm")
     parser.add_argument("--append", action="store_true", help="Append to existing seeds instead of overwriting")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="Ollama model to use")
+    parser.add_argument("--output", default=OUTPUT_FILE, help="Seed output file")
 
     args = parser.parse_args()
-    factory = SeedFactory()
+    factory = SeedFactory(args.output)
 
     if args.append:
         factory.load_existing()
 
+    added = 0
     if args.source == "google":
-        factory.harvest_google_taxonomy()
+        added = factory.harvest_google_taxonomy()
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
-        factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
+            sys.exit(2)
+        added = factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
+    
+    if args.source in {"google", "llm"} and added == 0:
+        print("[ERROR] Seed generation produced no new seeds; preserving existing seed file.")
+        sys.exit(1)
+    if not factory.seeds:
+        print("[ERROR] No seeds available to save.")
+        sys.exit(1)
     
     factory.save()
 

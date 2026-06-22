@@ -110,6 +110,7 @@ class PipelineCriticalFixTests(unittest.TestCase):
             state = {"scout_subs": ["CRM", "sales"]}
             with mock.patch.object(pipeline, "DATA", tmp_path / "data"), \
                     mock.patch.object(pipeline, "PROJECT", tmp_path), \
+                    mock.patch.object(pipeline, "RUNS", tmp_path / "runs"), \
                     mock.patch.object(pipeline, "run", fake_run):
                 pipeline.run_phase_fetch(args, "rid", state)
 
@@ -139,6 +140,7 @@ class PipelineCriticalFixTests(unittest.TestCase):
             state = {}
             with mock.patch.object(pipeline, "DATA", tmp_path / "data"), \
                     mock.patch.object(pipeline, "PROJECT", tmp_path), \
+                    mock.patch.object(pipeline, "RUNS", tmp_path / "runs"), \
                     mock.patch.object(pipeline, "run", fake_run), \
                     self.assertRaises(SystemExit):
                 pipeline.run_phase_fetch(args, "rid", state)

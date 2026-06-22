@@ -108,6 +108,13 @@ def run_phase_seed(args, run_id, state):
 
 def run_phase_scout(args, run_id, state):
     """Phase 2: Scout subreddits from seeds."""
+    if args.subs:
+        print(f"[SKIP] Using provided subreddits: {args.subs}")
+        state["scout_subs"] = split_csv(args.subs)
+        state["scout"] = "done"
+        save_run_state(run_id, state)
+        return
+
     if args.keywords:
         keywords = args.keywords
         print(f"[PHASE 2] Using provided keywords: {keywords[:80]}...")

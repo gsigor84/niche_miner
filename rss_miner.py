@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,16 @@ def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) ->
                 keywords.append(f"{prefix} {topic}")
             else:
                 keywords.append(topic)
+    return keywords
+
+def parse_keywords_arg(value: str, prefix: Optional[str] = None) -> List[str]:
+    """Parse comma-separated keywords from the CLI and apply the same prefix semantics as seed files."""
+    keywords = []
+    for item in value.split(","):
+        keyword = item.strip()
+        if not keyword:
+            continue
+        keywords.append(f"{prefix} {keyword}" if prefix else keyword)
     return keywords
 
 
@@ -315,6 +326,7 @@ def run_fetch(args):
     print(f"Output JSONL: {out_path}")
     print(f"Seen IDs: {seen_path}")
 
+    saved_count = 0
     for sub, feed_type, url in feeds:
         print(f"\n[{sub}] {feed_type}: {url}")
         try:
@@ -370,11 +382,13 @@ def run_fetch(args):
             append_jsonl(out_path, record)
             append_seen_id(seen_path, post_id)
             seen_ids.add(post_id)
+            saved_count += 1
 
             print(f"  saved: {post_id} | {title[:90]}")
             polite_sleep(args.sleep)
 
-    print("\nDone.")
+    print(f"\nDone. Saved {saved_count} new posts.")
+    return saved_count
 
 
 def main():
@@ -383,6 +397,8 @@ def main():
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--keywords", default=None, help="Comma-separated keywords; overrides seed_topics.txt")
+    ap.add_argument("--max_keywords", type=int, default=None, help="Maximum keywords to use from CLI or seed file")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
@@ -407,8 +423,13 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI or seed_topics.txt
+    if args.keywords:
+        args.keywords = parse_keywords_arg(args.keywords, prefix=args.prefix)
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
+    if args.max_keywords is not None:
+        args.keywords = args.keywords[:args.max_keywords]
     
     # Determine subreddits
     if args.subs:
@@ -423,6 +444,10 @@ def main():
     # If user didn't specify any feed types, default to search-only (most useful)
     if not (args.include_top or args.include_new or args.include_search):
         args.include_search = True
+
+    if args.include_search and not args.keywords:
+        print("[ERROR] Search feeds require at least one keyword.")
+        sys.exit(1)
 
     feeds = generate_all_feed_urls(
         subs=args.subs,
@@ -442,7 +467,10 @@ def main():
             print(f"{sub}\t{feed_type}\t{url}")
         return
 
-    run_fetch(args)
+    saved_count = run_fetch(args)
+    if saved_count == 0:
+        print("[ERROR] Fetch completed without saving any posts.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

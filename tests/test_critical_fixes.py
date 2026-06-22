@@ -43,6 +43,7 @@ install_optional_dependency_stubs()
 import gap_analysis
 import pipeline
 import rss_miner
+import scout_subreddits
 import seed_factory
 
 
@@ -189,6 +190,16 @@ class RssMinerCriticalFixTests(unittest.TestCase):
                 rss_miner.main()
 
         self.assertEqual(raised.exception.code, 1)
+
+
+class ScoutSubredditsCriticalFixTests(unittest.TestCase):
+    def test_no_discovered_subreddits_exits_nonzero(self):
+        with mock.patch.object(sys, "argv", ["scout_subreddits.py", "unlikely niche"]), \
+                mock.patch.object(scout_subreddits, "search_subreddits", return_value=[]), \
+                self.assertRaises(SystemExit) as raised:
+            scout_subreddits.main()
+
+        self.assertEqual(raised.exception.code, 2)
 
 
 class GapAnalysisCriticalFixTests(unittest.TestCase):

@@ -1,6 +1,7 @@
 import argparse
 import re
-from typing import List, Set, Dict
+import sys
+from typing import List, Optional
 from urllib.parse import urlencode, urlparse
 import feedparser
 import requests
@@ -8,7 +9,7 @@ from collections import Counter
 
 USER_AGENT = "niche-scout/1.0 (polite; local-run)"
 
-def search_subreddits(query: str, limit: int = 50) -> List[str]:
+def search_subreddits(query: str, limit: int = 50) -> Optional[List[str]]:
     """Search Reddit posts and extract unique subreddits."""
     print(f"[INFO] Scouting subreddits for query: '{query}'...")
     
@@ -27,7 +28,7 @@ def search_subreddits(query: str, limit: int = 50) -> List[str]:
         feed = feedparser.parse(r.text)
     except Exception as e:
         print(f"[ERROR] RSS search failed: {e}")
-        return []
+        return None
 
     subs = []
     for entry in feed.entries:
@@ -51,8 +52,12 @@ def main():
     all_subs = []
     keywords = [k.strip() for k in args.keywords.split(",") if k.strip()]
     
+    search_failed = False
     for kw in keywords:
         found = search_subreddits(kw)
+        if found is None:
+            search_failed = True
+            continue
         all_subs.extend(found)
         
     counts = Counter(all_subs)
@@ -67,6 +72,7 @@ def main():
         print(f"To use with rss_miner: --subs {','.join(top_subs)}")
     else:
         print("\n[WARNING] No relevant subreddits found. Try broader keywords.")
+        sys.exit(1 if search_failed else 2)
 
 if __name__ == "__main__":
     main()

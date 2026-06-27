@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +61,19 @@ def load_keywords(path: str = SEED_TOPICS_FILE, prefix: Optional[str] = None) ->
                 keywords.append(f"{prefix} {topic}")
             else:
                 keywords.append(topic)
+    return keywords
+
+
+def parse_keywords(raw_keywords: Optional[str], prefix: Optional[str] = None) -> List[str]:
+    """Parse CLI-provided keywords and apply the same optional prefix as seed files."""
+    if not raw_keywords:
+        return []
+    keywords = []
+    for item in raw_keywords.split(","):
+        topic = item.strip()
+        if not topic:
+            continue
+        keywords.append(f"{prefix} {topic}" if prefix else topic)
     return keywords
 
 
@@ -298,6 +312,7 @@ def run_fetch(args):
     out_path = Path(args.out)
     seen_path = Path(args.seen)
     seen_ids = load_seen_ids(seen_path)
+    saved_count = 0
 
     feeds = generate_all_feed_urls(
         subs=args.subs,
@@ -370,11 +385,13 @@ def run_fetch(args):
             append_jsonl(out_path, record)
             append_seen_id(seen_path, post_id)
             seen_ids.add(post_id)
+            saved_count += 1
 
             print(f"  saved: {post_id} | {title[:90]}")
             polite_sleep(args.sleep)
 
     print("\nDone.")
+    return saved_count
 
 
 def main():
@@ -383,6 +400,8 @@ def main():
     ap.add_argument("--mode", choices=["urls", "fetch"], required=True, help="Print URLs or fetch data")
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
+    ap.add_argument("--keywords", default=None, help="Comma-separated keywords to mine instead of seed_topics.txt")
+    ap.add_argument("--max_keywords", type=int, default=None, help="Limit number of keywords loaded")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
@@ -407,8 +426,13 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI first, falling back to seed_topics.txt.
+    if args.keywords:
+        args.keywords = parse_keywords(args.keywords, prefix=args.prefix)
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
+    if args.max_keywords is not None:
+        args.keywords = args.keywords[:args.max_keywords]
     
     # Determine subreddits
     if args.subs:
@@ -423,6 +447,10 @@ def main():
     # If user didn't specify any feed types, default to search-only (most useful)
     if not (args.include_top or args.include_new or args.include_search):
         args.include_search = True
+
+    if args.include_search and not args.keywords:
+        print("[ERROR] Search feeds require at least one keyword.", file=sys.stderr)
+        sys.exit(1)
 
     feeds = generate_all_feed_urls(
         subs=args.subs,

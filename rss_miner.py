@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -297,7 +298,9 @@ def generate_all_feed_urls(
 def run_fetch(args):
     out_path = Path(args.out)
     seen_path = Path(args.seen)
+    initial_size = out_path.stat().st_size if out_path.exists() else 0
     seen_ids = load_seen_ids(seen_path)
+    saved_count = 0
 
     feeds = generate_all_feed_urls(
         subs=args.subs,
@@ -370,11 +373,16 @@ def run_fetch(args):
             append_jsonl(out_path, record)
             append_seen_id(seen_path, post_id)
             seen_ids.add(post_id)
+            saved_count += 1
 
             print(f"  saved: {post_id} | {title[:90]}")
             polite_sleep(args.sleep)
 
     print("\nDone.")
+    if saved_count == 0 and (not out_path.exists() or out_path.stat().st_size == initial_size):
+        print("[ERROR] Fetch completed without saving any posts.")
+        return 1
+    return 0
 
 
 def main():
@@ -384,11 +392,13 @@ def main():
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
+    ap.add_argument("--keywords", help="Comma-separated keywords to use instead of seed_topics.txt")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
     ap.add_argument("--sort", default="top", choices=["top", "new", "relevance", "comments"], help="Search sort mode")
 
     ap.add_argument("--max_posts", type=int, default=20, help="Max posts per feed request")
+    ap.add_argument("--max_keywords", type=int, default=None, help="Max search keywords to use")
     ap.add_argument("--include_comments", action="store_true", help="Fetch comments RSS for each post")
     ap.add_argument("--max_comments", type=int, default=10, help="Max comments per post")
     ap.add_argument("--only_pain_points", action="store_true", help="Only save pain-point-ish posts")
@@ -407,8 +417,15 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI or seed_topics.txt
+    if args.keywords:
+        args.keywords = [k.strip() for k in args.keywords.split(",") if k.strip()]
+        if args.prefix:
+            args.keywords = [f"{args.prefix} {kw}" for kw in args.keywords]
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
+    if args.max_keywords is not None:
+        args.keywords = args.keywords[: args.max_keywords]
     
     # Determine subreddits
     if args.subs:
@@ -423,6 +440,10 @@ def main():
     # If user didn't specify any feed types, default to search-only (most useful)
     if not (args.include_top or args.include_new or args.include_search):
         args.include_search = True
+
+    if args.include_search and not args.keywords:
+        print("[ERROR] Search feeds require at least one keyword.")
+        sys.exit(1)
 
     feeds = generate_all_feed_urls(
         subs=args.subs,
@@ -442,7 +463,7 @@ def main():
             print(f"{sub}\t{feed_type}\t{url}")
         return
 
-    run_fetch(args)
+    sys.exit(run_fetch(args))
 
 
 if __name__ == "__main__":

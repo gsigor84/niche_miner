@@ -1,5 +1,6 @@
 import argparse
 import re
+import sys
 from typing import List, Set, Dict
 from urllib.parse import urlencode, urlparse
 import feedparser
@@ -50,6 +51,9 @@ def main():
     
     all_subs = []
     keywords = [k.strip() for k in args.keywords.split(",") if k.strip()]
+    if not keywords:
+        print("[ERROR] No keywords provided.")
+        sys.exit(1)
     
     for kw in keywords:
         found = search_subreddits(kw)
@@ -66,7 +70,8 @@ def main():
         print(f"\n[SUCCESS] Top discovered subreddits: {', '.join(top_subs)}")
         print(f"To use with rss_miner: --subs {','.join(top_subs)}")
     else:
-        print("\n[WARNING] No relevant subreddits found. Try broader keywords.")
+        print("\n[ERROR] No relevant subreddits found. Try broader keywords.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

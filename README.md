@@ -45,7 +45,7 @@ trash_miner/
 - Install dependencies:
 
 ```bash
-pip install requests feedparser beautifulsoup4 httpx
+pip install -r requirements.txt
 ```
 
 > `normalize_reddit_jsonl.py` and `trash_miner.py` use only the standard library — no extra deps needed for those.
@@ -246,7 +246,7 @@ Cleaned, enriched data ready for AI analysis or your next spreadsheet.
 
 ```bash
 # 1. Install deps
-pip install requests feedparser beautifulsoup4 httpx
+pip install -r requirements.txt
 
 # 2. Brainstorm seeds (e.g. for SaaS)
 python3 seed_factory.py --source llm --topic "CRM tools" --count 5

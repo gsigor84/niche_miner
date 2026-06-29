@@ -1,5 +1,7 @@
 import argparse
 import re
+import sys
+from pathlib import Path
 from typing import List, Set, Dict
 from urllib.parse import urlencode, urlparse
 import feedparser
@@ -45,6 +47,7 @@ def main():
     parser.add_argument("keywords", help="Comma-separated keywords or phrases")
     parser.add_argument("--limit", type=int, default=5, help="Number of top subreddits to return")
     parser.add_argument("--min_freq", type=int, default=1, help="Min appearances to count")
+    parser.add_argument("--output", help="Optional file to write one discovered subreddit per line")
 
     args = parser.parse_args()
     
@@ -65,8 +68,13 @@ def main():
     if top_subs:
         print(f"\n[SUCCESS] Top discovered subreddits: {', '.join(top_subs)}")
         print(f"To use with rss_miner: --subs {','.join(top_subs)}")
+        if args.output:
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text("\n".join(top_subs) + "\n", encoding="utf-8")
     else:
         print("\n[WARNING] No relevant subreddits found. Try broader keywords.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -12,6 +12,7 @@ Usage:
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -275,7 +276,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        sys.exit(1)
     
     print(f"Loaded {len(posts)} posts")
     
@@ -283,6 +284,9 @@ def main():
     print("Building co-occurrence graph...")
     G = build_graph(posts, min_degree=args.min_degree)
     print(f"Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+    if G.number_of_nodes() == 0:
+        print("[ERROR] No graph nodes after filtering; cannot produce gap analysis.")
+        sys.exit(1)
     
     # Find gaps
     print("Finding structural gaps...")

@@ -122,6 +122,22 @@ class PipelineCriticalFixTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--seen") + 1], str(self.data / "critical_run_seen_post_ids.txt"))
         self.assertEqual(state["fetch"], "done")
 
+    def test_normalize_phase_does_not_require_fetch_only_flags(self):
+        args = self.args()
+        raw_path = self.data / "critical_run_raw.jsonl"
+        raw_path.parent.mkdir(parents=True, exist_ok=True)
+        raw_path.write_text('{"post_id":"abc123","title":"CRM pain"}\n', encoding="utf-8")
+        state = {}
+
+        def fake_run(cmd, label):
+            normalized_path = self.data / "critical_run_normalized.jsonl"
+            normalized_path.write_text('{"post_id":"abc123","title":"CRM pain"}\n', encoding="utf-8")
+
+        with mock.patch.object(pipeline, "run", side_effect=fake_run):
+            pipeline.run_phase_normalize(args, args.run_id, state)
+
+        self.assertEqual(state["normalize"], "done")
+
 
 class SeedFactoryCriticalFixTests(unittest.TestCase):
     def test_failed_generation_preserves_existing_seed_file(self):

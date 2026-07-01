@@ -1,4 +1,5 @@
 import contextlib
+import datetime
 import importlib
 import io
 import os
@@ -100,6 +101,36 @@ class PipelineCriticalFixTests(unittest.TestCase):
         self.assertIn("--only_pain_points", cmd)
         self.assertEqual(state["fetch"], "done")
 
+    def test_fetch_without_subs_or_scout_output_fails(self):
+        import pipeline
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            seed_file = tmp_path / "seed_topics.txt"
+            seed_file.write_text("crm tools\n", encoding="utf-8")
+            args = types.SimpleNamespace(
+                run_id="unit_missing_scout",
+                subs=None,
+                keywords=None,
+                niche_type="saas",
+                max_posts=5,
+                max_seeds=2,
+                prefix=None,
+                only_pain_points=False,
+            )
+            state = {}
+
+            with mock.patch.object(pipeline, "SEED_FILE", seed_file), \
+                mock.patch.object(pipeline, "RUNS", tmp_path / "runs"), \
+                mock.patch.object(pipeline, "DATA", tmp_path / "data"), \
+                mock.patch.object(pipeline, "run") as run_mock:
+                with self.assertRaises(SystemExit) as raised:
+                    pipeline.run_phase_fetch(args, args.run_id, state)
+
+        self.assertNotEqual(raised.exception.code, 0)
+        self.assertNotIn("fetch", state)
+        run_mock.assert_not_called()
+
     def test_failed_scout_does_not_mark_state_done(self):
         import pipeline
 
@@ -114,6 +145,18 @@ class PipelineCriticalFixTests(unittest.TestCase):
                     pipeline.run_phase_scout(args, "unit_scout", state)
 
         self.assertNotIn("scout", state)
+
+    def test_generated_run_id_includes_time(self):
+        import pipeline
+
+        args = types.SimpleNamespace(topic="CRM Tools", niche_type="saas")
+
+        run_id = pipeline.generate_run_id(
+            args,
+            now=datetime.datetime(2026, 7, 1, 11, 2, 3),
+        )
+
+        self.assertEqual(run_id, "20260701_110203_crm_tools")
 
 
 class SeedFactoryCriticalFixTests(unittest.TestCase):

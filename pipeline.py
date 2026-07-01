@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import datetime
 import json
 import subprocess
 import sys
@@ -85,10 +86,19 @@ def load_scouted_subreddits(run_id):
     except json.JSONDecodeError:
         print(f"[ERROR] Invalid scout output: {path}")
         sys.exit(1)
-    return [s for s in data if isinstance(s, str) and s.strip()]
+    if not isinstance(data, list):
+        print(f"[ERROR] Invalid scout output: {path}")
+        sys.exit(1)
+    return [s.strip() for s in data if isinstance(s, str) and s.strip()]
 
 def comma_list(value):
     return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+def generate_run_id(args, now=None):
+    now = now or datetime.datetime.now()
+    ts = now.strftime("%Y%m%d_%H%M%S")
+    topic_slug = args.topic.lower().replace(" ", "_")[:20] if args.topic else args.niche_type
+    return f"{ts}_{topic_slug}"
 
 # ── Phases ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +153,9 @@ def run_phase_fetch(args, run_id, state):
     """Phase 3: Fetch Reddit data via rss_miner."""
     target_subs = comma_list(args.subs) or load_scouted_subreddits(run_id)
     keywords = comma_list(args.keywords) if args.keywords else seed_keywords(args.max_seeds)
+    if not target_subs:
+        print("[ERROR] No subreddits available for fetch. Pass --subs or run scout phase first.")
+        sys.exit(1)
     cmd = [
         "python3", "rss_miner.py",
         "--mode", "fetch",
@@ -248,10 +261,7 @@ def main():
             print("[ERROR] --run_id required with --resume or --phase")
             sys.exit(1)
     else:
-        import datetime
-        ts = datetime.datetime.now().strftime("%Y%m%d")
-        topic_slug = args.topic.lower().replace(" ", "_")[:20] if args.topic else args.niche_type
-        args.run_id = args.run_id or f"{ts}_{topic_slug}"
+        args.run_id = args.run_id or generate_run_id(args)
 
     print(f"\n{'='*60}")
     print(f"  TRASH MINER PIPELINE — {args.run_id}")

@@ -6,12 +6,13 @@ Takes normalized JSONL data → builds co-occurrence graph → identifies gaps.
 
 Usage:
     python3 gap_analysis.py --input data/party_tickets_normalized.jsonl --output data/party_tickets_gaps.json
-    python3 gap_analysis.py --input data/party_tickets_normalized.jsonl --viz --output data/party_tickets_gaps.png
+    python3 gap_analysis.py --input data/party_tickets_normalized.jsonl --viz --output data/party_tickets_gaps.json
 """
 
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -256,6 +257,18 @@ def visualize(G, gaps, output_path="gaps.png"):
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     print(f"Visualization saved to {output_path}")
 
+def resolve_output_paths(output, viz):
+    """Return separate JSON and PNG paths, preserving the legacy --output foo.png form."""
+    if not output:
+        return None, "gaps.png" if viz else None
+
+    output_path = Path(output)
+    if viz and output_path.suffix.lower() == ".png":
+        return str(output_path.with_suffix(".json")), str(output_path)
+    if viz:
+        return str(output_path), str(output_path.with_suffix(".png"))
+    return str(output_path), None
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -275,7 +288,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        sys.exit(1)
     
     print(f"Loaded {len(posts)} posts")
     
@@ -312,16 +325,17 @@ def main():
         "all_gaps": gaps,
     }
     
-    if args.output:
-        output_path = args.output
+    json_output, viz_output = resolve_output_paths(args.output, args.viz)
+
+    if json_output:
+        output_path = json_output
         with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
         print(f"\nResults saved to {output_path}")
     
     # Visualize
-    if args.viz:
-        viz_path = args.output.replace(".json", ".png") if args.output else "gaps.png"
-        visualize(G, gaps, viz_path)
+    if viz_output:
+        visualize(G, gaps, viz_output)
     
     print("\nDone.")
 

@@ -2,6 +2,7 @@ import contextlib
 import datetime
 import importlib
 import io
+import json
 import os
 import sys
 import tempfile
@@ -250,6 +251,39 @@ class GapAnalysisCriticalFixTests(unittest.TestCase):
                     gap_analysis.main()
 
         self.assertNotEqual(raised.exception.code, 0)
+
+    def test_png_output_does_not_overwrite_json_results(self):
+        import gap_analysis
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            normalized = tmp_path / "threads.jsonl"
+            normalized.write_text(
+                '{"title":"ticket transfer problem ticket transfer problem",'
+                '"summary":"mobile tickets mobile tickets",'
+                '"comments":[{"text":"buyer protection buyer protection"}]}\n',
+                encoding="utf-8",
+            )
+            png_output = tmp_path / "gaps.png"
+            argv = [
+                "gap_analysis.py",
+                "--input",
+                str(normalized),
+                "--output",
+                str(png_output),
+                "--viz",
+            ]
+
+            def fake_visualize(_graph, _gaps, output_path):
+                Path(output_path).write_bytes(b"PNG")
+
+            with mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(gap_analysis, "visualize", side_effect=fake_visualize):
+                gap_analysis.main()
+
+            json_output = tmp_path / "gaps.json"
+            self.assertEqual(png_output.read_bytes(), b"PNG")
+            self.assertEqual(json.loads(json_output.read_text(encoding="utf-8"))["total_posts"], 1)
 
 
 if __name__ == "__main__":

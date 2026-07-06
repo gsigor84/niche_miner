@@ -106,6 +106,33 @@ class PipelineCriticalFixTests(unittest.TestCase):
         self.assertEqual(cmd[cmd.index("--max_keywords") + 1], "3")
         self.assertEqual(cmd[cmd.index("--seen") + 1], str(self.runs / "critical_run" / "seen_post_ids.txt"))
 
+    def test_normalize_does_not_forward_unsupported_pain_filter_flag(self):
+        captured = {}
+        raw = self.data / "critical_run_raw.jsonl"
+        raw.parent.mkdir(parents=True)
+        raw.write_text("{}\n")
+
+        def fake_run(cmd, label, check=True):
+            captured["cmd"] = cmd
+
+        args = SimpleNamespace(run_id="critical_run", only_pain_points=True)
+
+        with mock.patch.object(pipeline, "run", fake_run):
+            pipeline.run_phase_normalize(args, "critical_run", {})
+
+        self.assertNotIn("--only_pain_points", captured["cmd"])
+        self.assertEqual(
+            captured["cmd"],
+            [
+                "python3",
+                "normalize_reddit_jsonl.py",
+                "--input",
+                str(raw),
+                "--output",
+                str(self.data / "critical_run_normalized.jsonl"),
+            ],
+        )
+
     def test_scout_uses_single_argv_keyword_argument_and_persists_handoff(self):
         captured = {}
 

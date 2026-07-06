@@ -30,6 +30,20 @@ def parse_args():
     p.add_argument("--min-degree", "-d", type=int, default=2, help="Min degree to appear in graph")
     return p.parse_args()
 
+def resolve_output_paths(output, viz):
+    """Return separate JSON and visualization paths without overwriting either."""
+    if not output:
+        return None, Path("gaps.png") if viz else None
+
+    output_path = Path(output)
+    if not viz:
+        return output_path, None
+
+    if output_path.suffix.lower() == ".png":
+        return output_path.with_suffix(".json"), output_path
+
+    return output_path, output_path.with_suffix(".png")
+
 # ── Text processing ───────────────────────────────────────────────────────────
 
 STOPWORDS = {
@@ -261,6 +275,7 @@ def visualize(G, gaps, output_path="gaps.png"):
 
 def main():
     args = parse_args()
+    output_path, viz_path = resolve_output_paths(args.output, args.viz)
     
     # Load posts
     posts = []
@@ -313,15 +328,13 @@ def main():
         "all_gaps": gaps,
     }
     
-    if args.output:
-        output_path = args.output
+    if output_path:
         with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
         print(f"\nResults saved to {output_path}")
     
     # Visualize
     if args.viz:
-        viz_path = args.output.replace(".json", ".png") if args.output else "gaps.png"
         visualize(G, gaps, viz_path)
     
     print("\nDone.")

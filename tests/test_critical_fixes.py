@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pipeline
+import gap_analysis
 
 
 class PipelineCriticalFixTests(unittest.TestCase):
@@ -81,6 +82,7 @@ class PipelineCriticalFixTests(unittest.TestCase):
         args = SimpleNamespace(
             niche_type="saas",
             max_posts=7,
+            max_seeds=3,
             run_id="critical_run",
             keywords="crm tools,sales automation",
             prefix="best",
@@ -100,6 +102,8 @@ class PipelineCriticalFixTests(unittest.TestCase):
         self.assertIn("--only_pain_points", cmd)
         self.assertIn("--subs", cmd)
         self.assertEqual(cmd[cmd.index("--subs") + 1], "CRM,sales")
+        self.assertIn("--max_keywords", cmd)
+        self.assertEqual(cmd[cmd.index("--max_keywords") + 1], "3")
         self.assertEqual(cmd[cmd.index("--seen") + 1], str(self.runs / "critical_run" / "seen_post_ids.txt"))
 
     def test_scout_uses_single_argv_keyword_argument_and_persists_handoff(self):
@@ -126,6 +130,12 @@ class PipelineCriticalFixTests(unittest.TestCase):
         self.assertEqual(captured["cmd"][:3], ["python3", "scout_subreddits.py", "crm tools,sales automation"])
         self.assertEqual(state["scout_subs"], ["CRM", "sales"])
         self.assertEqual(state["scout"], "done")
+
+    def test_gap_viz_png_output_uses_separate_json_path(self):
+        json_path, viz_path = gap_analysis.resolve_output_paths("/tmp/critical_gaps.png", True)
+
+        self.assertEqual(json_path, Path("/tmp/critical_gaps.json"))
+        self.assertEqual(viz_path, Path("/tmp/critical_gaps.png"))
 
 
 if __name__ == "__main__":

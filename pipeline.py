@@ -137,6 +137,7 @@ def run_phase_fetch(args, run_id, state):
         "--mode", "fetch",
         "--niche_type", args.niche_type,
         "--max_posts", str(args.max_posts),
+        "--max_keywords", str(args.max_seeds),
         "--out", str(DATA / f"{args.run_id}_raw.jsonl"),
         "--seen", str(RUNS / run_id / "seen_post_ids.txt"),
         "--include_comments",

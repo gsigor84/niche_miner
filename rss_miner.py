@@ -393,6 +393,7 @@ def main():
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
     ap.add_argument("--keywords", help="Comma-separated keywords to use instead of seed_topics.txt")
+    ap.add_argument("--max_keywords", type=int, default=None, help="Limit loaded keywords before building search URLs")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
     ap.add_argument("--sort", default="top", choices=["top", "new", "relevance", "comments"], help="Search sort mode")
@@ -423,6 +424,8 @@ def main():
             args.keywords = [f"{args.prefix} {kw}" for kw in args.keywords]
     else:
         args.keywords = load_keywords(prefix=args.prefix)
+    if args.max_keywords is not None:
+        args.keywords = args.keywords[:args.max_keywords]
     
     # Determine subreddits
     if args.subs:

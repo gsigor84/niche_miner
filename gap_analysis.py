@@ -12,6 +12,7 @@ Usage:
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -275,7 +276,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        sys.exit(1)
     
     print(f"Loaded {len(posts)} posts")
     
@@ -314,6 +315,7 @@ def main():
     
     if args.output:
         output_path = args.output
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
         print(f"\nResults saved to {output_path}")

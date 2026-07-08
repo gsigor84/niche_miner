@@ -12,6 +12,7 @@ Usage:
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -275,7 +276,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        sys.exit(1)
     
     print(f"Loaded {len(posts)} posts")
     
@@ -312,15 +313,21 @@ def main():
         "all_gaps": gaps,
     }
     
-    if args.output:
-        output_path = args.output
-        with open(output_path, "w") as f:
+    output_path = Path(args.output) if args.output else None
+    if output_path and args.viz and output_path.suffix.lower() == ".png":
+        json_output_path = output_path.with_suffix(".json")
+        viz_path = output_path
+    else:
+        json_output_path = output_path
+        viz_path = output_path.with_suffix(".png") if output_path else Path("gaps.png")
+
+    if json_output_path:
+        with open(json_output_path, "w") as f:
             json.dump(result, f, indent=2)
-        print(f"\nResults saved to {output_path}")
+        print(f"\nResults saved to {json_output_path}")
     
     # Visualize
     if args.viz:
-        viz_path = args.output.replace(".json", ".png") if args.output else "gaps.png"
         visualize(G, gaps, viz_path)
     
     print("\nDone.")

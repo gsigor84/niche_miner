@@ -83,6 +83,7 @@ class PipelineCriticalFixTests(unittest.TestCase):
 
             with mock.patch.object(pipeline, "PROJECT", tmp_path), \
                  mock.patch.object(pipeline, "DATA", data_dir), \
+                 mock.patch.object(pipeline, "RUNS", tmp_path / "runs"), \
                  mock.patch.object(pipeline, "run", side_effect=fake_run):
                 pipeline.run_phase_fetch(args, args.run_id, state)
 

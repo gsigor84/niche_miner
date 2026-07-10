@@ -25,6 +25,7 @@ import argparse
 import json
 import random
 import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -298,6 +299,7 @@ def run_fetch(args):
     out_path = Path(args.out)
     seen_path = Path(args.seen)
     seen_ids = load_seen_ids(seen_path)
+    saved_count = 0
 
     feeds = generate_all_feed_urls(
         subs=args.subs,
@@ -314,6 +316,10 @@ def run_fetch(args):
     print(f"Feeds to fetch: {len(feeds)}")
     print(f"Output JSONL: {out_path}")
     print(f"Seen IDs: {seen_path}")
+
+    if not feeds:
+        print("[ERROR] No feeds to fetch. Check --subs, --keywords, and feed type flags.")
+        return 1
 
     for sub, feed_type, url in feeds:
         print(f"\n[{sub}] {feed_type}: {url}")
@@ -370,11 +376,17 @@ def run_fetch(args):
             append_jsonl(out_path, record)
             append_seen_id(seen_path, post_id)
             seen_ids.add(post_id)
+            saved_count += 1
 
             print(f"  saved: {post_id} | {title[:90]}")
             polite_sleep(args.sleep)
 
+    if saved_count == 0:
+        print("\n[ERROR] Fetch completed without saving any posts.")
+        return 1
+
     print("\nDone.")
+    return 0
 
 
 def main():
@@ -384,6 +396,7 @@ def main():
     ap.add_argument("--niche_type", default="ecommerce", help="Niche type for query packs (saas, ecommerce, services, learning)")
     ap.add_argument("--prefix", default=None, help="Optional keyword prefix (e.g. 'print on demand')")
     ap.add_argument("--subs", help="Comma-separated list of subreddits to target")
+    ap.add_argument("--keywords", help="Comma-separated keywords or phrases. Defaults to seed_topics.txt")
     
     ap.add_argument("--t", default="month", choices=["day", "week", "month", "year", "all"], help="Top/Search time window")
     ap.add_argument("--sort", default="top", choices=["top", "new", "relevance", "comments"], help="Search sort mode")
@@ -407,8 +420,13 @@ def main():
     # Load templates from config
     args.templates = load_query_templates(args.niche_type)
     
-    # Load keywords from seed_topics.txt
-    args.keywords = load_keywords(prefix=args.prefix)
+    # Load keywords from CLI when supplied; otherwise fall back to seed_topics.txt.
+    if args.keywords:
+        args.keywords = [kw.strip() for kw in args.keywords.split(",") if kw.strip()]
+        if args.prefix:
+            args.keywords = [f"{args.prefix} {kw}" for kw in args.keywords]
+    else:
+        args.keywords = load_keywords(prefix=args.prefix)
     
     # Determine subreddits
     if args.subs:
@@ -423,6 +441,10 @@ def main():
     # If user didn't specify any feed types, default to search-only (most useful)
     if not (args.include_top or args.include_new or args.include_search):
         args.include_search = True
+
+    if args.include_search and not args.keywords:
+        print("[ERROR] Search feeds require keywords. Provide --keywords or a non-empty seed_topics.txt.")
+        sys.exit(1)
 
     feeds = generate_all_feed_urls(
         subs=args.subs,
@@ -442,7 +464,7 @@ def main():
             print(f"{sub}\t{feed_type}\t{url}")
         return
 
-    run_fetch(args)
+    sys.exit(run_fetch(args))
 
 
 if __name__ == "__main__":

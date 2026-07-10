@@ -12,6 +12,7 @@ Usage:
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -275,7 +276,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        sys.exit(1)
     
     print(f"Loaded {len(posts)} posts")
     

@@ -272,9 +272,9 @@ def main():
     print(f"  Viz:        {args.viz}")
     print('='*60)
 
-    if args.resume:
+    if args.resume or args.phase:
         state = load_run_state(args.run_id)
-        if not state:
+        if args.resume and not state:
             print(f"[WARN] No saved state for {args.run_id}, starting fresh")
             state = {}
     else:

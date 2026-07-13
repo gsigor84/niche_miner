@@ -77,6 +77,31 @@ class CriticalPipelineFixTests(unittest.TestCase):
         self.assertNotIn("--only_pain_points", cmd)
         self.assertEqual(state["normalize"], "done")
 
+    def test_single_phase_preserves_existing_run_state(self):
+        args = self.make_args(phase="normalize")
+        existing_state = {"seed": "done", "scout": "done", "fetch": "done"}
+        seen_states = []
+
+        def normalize(args, run_id, state):
+            state["normalize"] = "done"
+            seen_states.append(dict(state))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            with mock.patch.object(pipeline, "DATA", tmp / "data"), \
+                    mock.patch.object(pipeline, "RUNS", tmp / "runs"), \
+                    mock.patch.object(pipeline, "parse_args", return_value=args), \
+                    mock.patch.object(pipeline, "load_run_state", return_value=dict(existing_state)), \
+                    mock.patch.object(pipeline, "run_phase_normalize", normalize), \
+                    contextlib.redirect_stdout(io.StringIO()), \
+                    self.assertRaises(SystemExit):
+                pipeline.main()
+
+        self.assertEqual(
+            seen_states,
+            [{"seed": "done", "scout": "done", "fetch": "done", "normalize": "done"}],
+        )
+
     def test_scout_persists_discovered_subreddits_and_uses_argv(self):
         args = self.make_args(keywords="crm tools,sales automation")
         result = SimpleNamespace(

@@ -45,10 +45,10 @@ trash_miner/
 - Install dependencies:
 
 ```bash
-pip install requests feedparser beautifulsoup4 httpx
+pip install -r requirements.txt
 ```
 
-> `normalize_reddit_jsonl.py` and `trash_miner.py` use only the standard library — no extra deps needed for those.
+> `normalize_reddit_jsonl.py` and `trash_miner.py` use only the standard library; the miner and gap-analysis pipeline use the packages listed in `requirements.txt`.
 
 ---
 

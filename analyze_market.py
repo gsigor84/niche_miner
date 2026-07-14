@@ -63,23 +63,19 @@ def analyze_batch(batch, model):
             timeout=120
         )
         r.raise_for_status()
-        return r.json().get("response", "No response from LLM.")
+        analysis = r.json().get("response")
     except Exception as e:
-        return f"Error during analysis: {e}"
+        raise RuntimeError(f"LLM analysis failed: {e}") from e
+
+    if not analysis or not analysis.strip():
+        raise RuntimeError("LLM analysis failed: empty response")
+    return analysis
 
 def generate_report(threads, model, batch_size=10):
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_path = os.path.join(OUTPUT_DIR, f"market_intelligence_{timestamp}.md")
-    
     print(f"[INFO] Analyzing {len(threads)} threads in batches of {batch_size}...")
     
     all_analyses = []
-    # Only analyze first 50 threads to save time/cost in this demo, or process all if requested
-    # For this script we will process 3 batches (up to 30 threads) as a deep dive
-    max_threads = min(len(threads), 30) 
-    
-    for i in range(0, max_threads, batch_size):
+    for i in range(0, len(threads), batch_size):
         batch = threads[i:i+batch_size]
         print(f"  [>] Processing batch {i//batch_size + 1} ({len(batch)} threads)...")
         analysis = analyze_batch(batch, model)
@@ -87,11 +83,16 @@ def generate_report(threads, model, batch_size=10):
 
     # Final summary of summaries
     print("[INFO] Generating final consolidated report...")
-    
+
+    # Do not create or replace a report until every batch has succeeded.
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = os.path.join(OUTPUT_DIR, f"market_intelligence_{timestamp}.md")
+
     with open(report_path, "w", encoding="utf-8") as f:
         f.write(f"# Market Intelligence Report\n")
         f.write(f"*Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n")
-        f.write(f"*Source: {len(threads)} Reddit Threads (Deep Dive on Top {max_threads})*\n\n")
+        f.write(f"*Source: {len(threads)} Reddit Threads*\n\n")
         
         f.write("## 🚀 Executive Summary of Findings\n")
         f.write("Combined insights from multiple community discussions.\n\n")

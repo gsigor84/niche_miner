@@ -244,8 +244,14 @@ def visualize(G, gaps, output_path="gaps.png"):
         ax=ax
     )
     
-    # Labels for top gap keywords only
-    top_kw = {g["keyword"]: g["keyword"].replace("_", " ") for g in gaps[:15]}
+    # Labels for top gap keywords retained in the visualization subgraph only
+    top_kw = {}
+    for gap in gaps:
+        keyword = gap["keyword"]
+        if keyword in G:
+            top_kw[keyword] = keyword.replace("_", " ")
+        if len(top_kw) == 15:
+            break
     nx.draw_networkx_labels(G, pos, labels=top_kw, font_size=8, ax=ax)
     
     plt.colorbar(scatter, label="Gap Opportunity Score", ax=ax)

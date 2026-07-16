@@ -57,6 +57,16 @@ class GapAnalysisOutputTests(unittest.TestCase):
 
             self.assertEqual(input_path.read_text(encoding="utf-8"), original)
 
+    def test_large_visualization_does_not_label_removed_nodes(self):
+        graph = nx.Graph()
+        graph.add_nodes_from(f"node_{index}" for index in range(101))
+        gaps = [{"keyword": "node_100", "gap_score": 100}]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "graph.png"
+            gap_analysis.visualize(graph, gaps, output_path)
+            self.assertTrue(output_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

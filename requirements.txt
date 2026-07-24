@@ -1,0 +1,8 @@
+beautifulsoup4
+feedparser
+httpx
+matplotlib
+networkx
+numpy
+requests
+scipy

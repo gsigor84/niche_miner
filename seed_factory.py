@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 try:
     import requests
 except ImportError:
@@ -103,15 +104,24 @@ def main():
 
     if args.append:
         factory.load_existing()
+    before_seeds = set(factory.seeds)
 
     if args.source == "google":
         factory.harvest_google_taxonomy()
     elif args.source == "llm":
         if not args.topic:
             print("[ERROR] --topic is required for LLM source.")
-            return
+            sys.exit(1)
         factory.brainstorm_llm(args.topic, count=args.count, model=args.model)
-    
+
+    if args.source != "manual" and not (factory.seeds - before_seeds):
+        print("[ERROR] Seed generation produced no new topics; preserving existing seed file.")
+        sys.exit(1)
+
+    if not factory.seeds:
+        print("[ERROR] No seed topics to save; preserving existing seed file.")
+        sys.exit(1)
+
     factory.save()
 
 

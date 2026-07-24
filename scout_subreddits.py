@@ -1,4 +1,5 @@
 import argparse
+import sys
 import re
 from typing import List, Set, Dict
 from urllib.parse import urlencode, urlparse
@@ -67,6 +68,7 @@ def main():
         print(f"To use with rss_miner: --subs {','.join(top_subs)}")
     else:
         print("\n[WARNING] No relevant subreddits found. Try broader keywords.")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

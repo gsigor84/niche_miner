@@ -6,12 +6,13 @@ Takes normalized JSONL data → builds co-occurrence graph → identifies gaps.
 
 Usage:
     python3 gap_analysis.py --input data/party_tickets_normalized.jsonl --output data/party_tickets_gaps.json
-    python3 gap_analysis.py --input data/party_tickets_normalized.jsonl --viz --output data/party_tickets_gaps.png
+    python3 gap_analysis.py --input data/party_tickets_normalized.jsonl --viz --output data/party_tickets_gaps.json
 """
 
 import argparse
 import json
 import re
+import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -28,6 +29,20 @@ def parse_args():
     p.add_argument("--top", "-t", type=int, default=20, help="Number of top gaps to report")
     p.add_argument("--min-degree", "-d", type=int, default=2, help="Min degree to appear in graph")
     return p.parse_args()
+
+def resolve_output_paths(output, viz):
+    """Return separate JSON and visualization paths without overwriting either."""
+    if not output:
+        return None, Path("gaps.png") if viz else None
+
+    output_path = Path(output)
+    if not viz:
+        return output_path, None
+
+    if output_path.suffix.lower() == ".png":
+        return output_path.with_suffix(".json"), output_path
+
+    return output_path, output_path.with_suffix(".png")
 
 # ── Text processing ───────────────────────────────────────────────────────────
 
@@ -244,8 +259,14 @@ def visualize(G, gaps, output_path="gaps.png"):
         ax=ax
     )
     
-    # Labels for top gap keywords only
-    top_kw = {g["keyword"]: g["keyword"].replace("_", " ") for g in gaps[:15]}
+    # Labels for top gap keywords retained in the visualization subgraph only
+    top_kw = {}
+    for gap in gaps:
+        keyword = gap["keyword"]
+        if keyword in G:
+            top_kw[keyword] = keyword.replace("_", " ")
+        if len(top_kw) == 15:
+            break
     nx.draw_networkx_labels(G, pos, labels=top_kw, font_size=8, ax=ax)
     
     plt.colorbar(scatter, label="Gap Opportunity Score", ax=ax)
@@ -260,6 +281,13 @@ def visualize(G, gaps, output_path="gaps.png"):
 
 def main():
     args = parse_args()
+    input_path = Path(args.input)
+    output_path, viz_path = resolve_output_paths(args.output, args.viz)
+
+    if output_path and output_path.resolve() == input_path.resolve():
+        raise SystemExit("Refusing to overwrite the input file with gap analysis output")
+    if viz_path and Path(viz_path).resolve() == input_path.resolve():
+        raise SystemExit("Refusing to overwrite the input file with a visualization")
     
     # Load posts
     posts = []
@@ -275,7 +303,7 @@ def main():
     
     if not posts:
         print(f"No posts loaded from {args.input}")
-        return
+        sys.exit(1)
     
     print(f"Loaded {len(posts)} posts")
     
@@ -312,15 +340,13 @@ def main():
         "all_gaps": gaps,
     }
     
-    if args.output:
-        output_path = args.output
+    if output_path:
         with open(output_path, "w") as f:
             json.dump(result, f, indent=2)
         print(f"\nResults saved to {output_path}")
     
     # Visualize
     if args.viz:
-        viz_path = args.output.replace(".json", ".png") if args.output else "gaps.png"
         visualize(G, gaps, viz_path)
     
     print("\nDone.")

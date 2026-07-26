@@ -1,9 +1,35 @@
+import os
+import sys
+import tempfile
+from pathlib import Path
+
 import requests
 
 # --- CONFIGURATION ---
 OUTPUT_FILE = "seed_topics.txt"
 # Official Google Shopping Taxonomy URL (Plain Text)
-TAXONOMY_URL = "http://www.google.com/basepages/producttype/taxonomy.en-US.txt"
+TAXONOMY_URL = "https://www.google.com/basepages/producttype/taxonomy.en-US.txt"
+
+
+def write_seeds_atomic(path, products):
+    """Write seeds atomically so a crash cannot truncate the prior file."""
+    destination = Path(path)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=destination.name + ".",
+        suffix=".tmp",
+        dir=str(destination.parent or "."),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            for p in products:
+                f.write(f"{p}\n")
+        os.replace(tmp_name, destination)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
 
 
 def harvest_products():
@@ -14,12 +40,14 @@ def harvest_products():
     print(f"[INFO] Downloading official Google Product Taxonomy...")
 
     try:
-        response = requests.get(TAXONOMY_URL)
+        response = requests.get(TAXONOMY_URL, timeout=60)
         response.raise_for_status()
         raw_data = response.text.splitlines()
     except Exception as e:
         print(f"[ERROR] Failed to download taxonomy: {e}")
-        return
+        if os.path.exists(OUTPUT_FILE):
+            print(f"[ERROR] Preserving existing '{OUTPUT_FILE}'.")
+        return 1
 
     unique_products = set()
 
@@ -46,19 +74,32 @@ def harvest_products():
         if len(leaf_node) > 3:
             unique_products.add(leaf_node)
 
+    # Preserve any existing seed file when harvest produced nothing usable.
+    # An empty/comment-only taxonomy response previously truncated this file.
+    if not unique_products:
+        if os.path.exists(OUTPUT_FILE):
+            print(
+                f"[ERROR] No product categories extracted from taxonomy. "
+                f"Preserving existing '{OUTPUT_FILE}'."
+            )
+        else:
+            print(
+                "[ERROR] No product categories extracted from taxonomy. "
+                f"Nothing written to '{OUTPUT_FILE}'."
+            )
+        return 1
+
     # --- SAVE ---
     sorted_products = sorted(list(unique_products))
-
-    with open(OUTPUT_FILE, "w") as f:
-        for p in sorted_products:
-            f.write(f"{p}\n")
+    write_seeds_atomic(OUTPUT_FILE, sorted_products)
 
     print("==================================================")
     print(f"[SUCCESS] Extracted {len(sorted_products)} unique product categories.")
     print(f"[EXAMPLE] {sorted_products[:5]}")
     print(f"[ACTION] Saved to '{OUTPUT_FILE}'.")
     print("[NEXT] Now run 'python trash_miner.py' to find universal negative keywords.")
+    return 0
 
 
 if __name__ == "__main__":
-    harvest_products()
+    sys.exit(harvest_products() or 0)
